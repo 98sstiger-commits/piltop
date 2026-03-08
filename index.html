@@ -7,6 +7,7 @@
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7.23.3/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body style="margin:0;padding:0;background:#060412;">
   <div id="root"></div>
@@ -16,41 +17,66 @@ const { useState, useEffect, useRef } = React;
 // ═══════════════════════════════════════════════════════════════
 //  ACADEMY CONFIG
 // ═══════════════════════════════════════════════════════════════
-const AID  = "PILTOP";
-const APW  = "piltop";
-const BRAND = "PILTOP";   // 링크 코드 앞에 붙는 브랜드명
+const AID   = "PILTOP";
+const APW   = "piltop";
+const BRAND = "PILTOP";
 
 // ═══════════════════════════════════════════════════════════════
-//  STORAGE
+//  SUPABASE CONFIG  ← 여기에 본인 정보 입력!
 // ═══════════════════════════════════════════════════════════════
-const S={
-  async get(k){
-    try{const v=localStorage.getItem(k);if(v)return JSON.parse(v);}catch{}
+const SUPABASE_URL = "YOUR_SUPABASE_URL";      // 예: https://abcdef.supabase.co
+const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY"; // 예: eyJhbGci...
+
+// ═══════════════════════════════════════════════════════════════
+//  STORAGE (Supabase + localStorage 이중백업)
+// ═══════════════════════════════════════════════════════════════
+const sbReady = SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_KEY !== "YOUR_SUPABASE_ANON_KEY";
+const sb = sbReady ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+const S = {
+  async get(k) {
+    if (sbReady) {
+      try {
+        const { data } = await sb.from('piltop_data').select('value').eq('key', k).maybeSingle();
+        if (data) return data.value;
+      } catch(e) {}
+    }
+    try { const v = localStorage.getItem(k); if (v) return JSON.parse(v); } catch {}
     return null;
   },
-  async set(k,v){
-    try{localStorage.setItem(k,JSON.stringify(v));}catch{}
+  async set(k, v) {
+    if (sbReady) {
+      try { await sb.from('piltop_data').upsert({ key: k, value: v, updated_at: new Date().toISOString() }); } catch(e) {}
+    }
+    try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
   },
-  async del(k){
-    try{localStorage.removeItem(k);}catch{}
+  async del(k) {
+    if (sbReady) {
+      try { await sb.from('piltop_data').delete().eq('key', k); } catch(e) {}
+    }
+    try { localStorage.removeItem(k); } catch {}
   },
-  async list(pre){
-    const keys=[];
-    try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith(pre))keys.push(k);}}catch{}
+  async list(pre) {
+    if (sbReady) {
+      try {
+        const { data } = await sb.from('piltop_data').select('key').like('key', `${pre}%`);
+        if (data && data.length > 0) return data.map(d => d.key);
+      } catch(e) {}
+    }
+    const keys = [];
+    try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k?.startsWith(pre)) keys.push(k); } } catch {}
     return keys;
   }
 };
-const K={link:t=>`${AID}:L:${t}`,links:()=>`${AID}:LINKS`,cfg:()=>`${AID}:CFG`};
+const K = { link: t => `${AID}:L:${t}`, links: () => `${AID}:LINKS`, cfg: () => `${AID}:CFG` };
 
-// 브랜드 코드 생성: PILTOP-AB3X7KMN
-const mkCode=()=>{
-  const c="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const rand=Array.from({length:8},()=>c[Math.floor(Math.random()*c.length)]).join("");
-  return `${BRAND}-${rand}`;
+const mkCode = () => {
+  const c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return `${BRAND}-` + Array.from({length:8}, () => c[Math.floor(Math.random()*c.length)]).join("");
 };
 
 // ═══════════════════════════════════════════════════════════════
-//  QUESTIONS (동일)
+//  QUESTIONS
 // ═══════════════════════════════════════════════════════════════
 const RQ=[
   {id:"R1",d:"R",t:"기계나 전자 기기를 분해하거나 조립하는 것이 재미있다."},
@@ -150,7 +176,7 @@ const BQ=[
   {id:"EI4",d:"EI",t:"생각 정리 방식은?",a:"말하면서 생각이 정리된다",b:"먼저 혼자 생각한 뒤 이야기한다",av:"E",bv:"I"},
   {id:"SN1",d:"SN",t:"정보를 받아들일 때 나는?",a:"구체적인 사실·데이터를 중시한다",b:"가능성·미래 비전을 더 중시한다",av:"S",bv:"N"},
   {id:"SN2",d:"SN",t:"문제 접근 방식은?",a:"경험으로 검증된 방법을 따른다",b:"새롭고 혁신적인 방식을 시도한다",av:"S",bv:"N"},
-  {id:"SN3",d:"SN",t:"나는 주로 주의를 기울이는 것은?",a:"세부 사항과 정확한 내용",b:"전체적인 패턴과 큰 그림",av:"S",bv:"N"},
+  {id:"SN3",d:"SN",t:"주의를 기울이는 것은?",a:"세부 사항과 정확한 내용",b:"전체적인 패턴과 큰 그림",av:"S",bv:"N"},
   {id:"SN4",d:"SN",t:"나는 주로?",a:"현실적이고 실용적인 것에 집중한다",b:"상상하며 혁신적인 것을 꿈꾼다",av:"S",bv:"N"},
   {id:"TF1",d:"TF",t:"결정을 내릴 때 나는?",a:"논리와 객관적 분석을 우선한다",b:"사람들의 감정과 관계를 먼저 고려한다",av:"T",bv:"F"},
   {id:"TF2",d:"TF",t:"갈등 상황에서 나는?",a:"옳고 그름을 따지고 논리적으로 해결한다",b:"감정을 다독이며 관계 회복을 우선한다",av:"T",bv:"F"},
@@ -163,37 +189,77 @@ const BQ=[
 ];
 
 // ═══════════════════════════════════════════════════════════════
-//  MAPS
+//  MAPS (풍성한 설명 추가)
 // ═══════════════════════════════════════════════════════════════
 const RM={
-  R:{name:"현실형",emoji:"🔧",color:"#F97316",desc:"실용적·기술적 활동 선호. 기계·도구를 활용한 현장 중심 작업을 즐김",
+  R:{name:"현실형",emoji:"🔧",color:"#F97316",
+     desc:"실용적·기술적 활동 선호. 기계·도구를 활용한 현장 중심 작업을 즐김",
+     fullDesc:"손으로 직접 만들고 기계와 도구를 다루는 것에 높은 흥미와 재능을 보입니다. 현장에서 실질적인 결과물을 만들어내는 작업에서 큰 보람을 느끼며, 추상적인 이론보다 구체적이고 실용적인 방식으로 문제를 해결하는 것을 선호합니다. 이공계 기술 직군이나 체육·스포츠 분야에서 두각을 나타낼 가능성이 높습니다.",
+     strength:["기계·도구 조작 능력","공간 지각 능력","실용적 문제 해결","체력·지구력","집중력과 정밀성"],
+     study:"실험·실습 중심 학습, 직접 만들어보는 프로젝트 방식",
      majors:["기계공학","전기전자공학","건축학","컴퓨터공학","항공우주공학","체육교육","소방방재학","로봇공학"],
      jobs:["기계엔지니어","건축사","전기기사","파일럿","IT엔지니어","스포츠코치","소방관","자동화전문가"],stream:"이공계열"},
-  I:{name:"탐구형",emoji:"🔬",color:"#6366F1",desc:"지적 탐구·분석 중시. 문제의 원리를 이해하고 연구하는 것을 선호",
+  I:{name:"탐구형",emoji:"🔬",color:"#6366F1",
+     desc:"지적 탐구·분석 중시. 문제의 원리를 이해하고 연구하는 것을 선호",
+     fullDesc:"복잡한 문제를 분석하고 원리를 탐구하는 것에 강한 흥미를 보입니다. '왜?'라는 질문을 자주 던지며 깊이 파고드는 성향이 강하고, 연구·실험·데이터 분석 등 지식을 생성하는 과정에서 큰 만족감을 느낍니다. 의학·과학·AI 등 전문 연구 분야에서 뛰어난 역량을 발휘할 가능성이 높습니다.",
+     strength:["분석·추론 능력","집중적 몰입력","논리적 사고","자기주도 학습","비판적 사고"],
+     study:"개념 원리 이해 중심, 심화 탐구·논문 읽기, 혼자 집중하는 환경",
      majors:["의학","치의학","한의학","약학","수학","물리학","화학","생명과학","심리학","AI사이언스"],
      jobs:["의사","약사","연구원","데이터사이언티스트","생명공학자","임상심리사","AI엔지니어"],stream:"자연/의학계열"},
-  A:{name:"예술형",emoji:"🎨",color:"#EC4899",desc:"창의적 표현·심미 감각 중시. 예술·문학·음악·디자인에 강한 흥미",
+  A:{name:"예술형",emoji:"🎨",color:"#EC4899",
+     desc:"창의적 표현·심미 감각 중시. 예술·문학·음악·디자인에 강한 흥미",
+     fullDesc:"독창적인 아이디어를 표현하고 새로운 것을 창조하는 과정에서 가장 큰 에너지를 얻습니다. 틀에 박힌 규칙보다는 자유로운 발상을 통해 문제를 해결하며, 미적 감각과 감수성이 뛰어납니다. 예술·디자인·콘텐츠·문학 분야에서 자신만의 세계를 구축할 가능성이 높습니다.",
+     strength:["창의적 사고","미적 감각","감수성과 표현력","독창적 문제 해결","예술적 집중력"],
+     study:"창작 프로젝트 중심, 자유로운 탐색과 표현, 영감 중심 학습",
      majors:["시각디자인","영상미디어","음악학","국어국문학","연극영화","패션디자인","광고홍보"],
      jobs:["UX/UI디자이너","뮤지션","작가","영화감독","콘텐츠크리에이터","패션디자이너"],stream:"예체능/인문계열"},
-  S:{name:"사회형",emoji:"🤝",color:"#10B981",desc:"사람과의 관계 중시. 돕고 가르치고 봉사하는 활동에서 보람을 느낌",
+  S:{name:"사회형",emoji:"🤝",color:"#10B981",
+     desc:"사람과의 관계 중시. 돕고 가르치고 봉사하는 활동에서 보람을 느낌",
+     fullDesc:"사람과의 관계에서 에너지를 얻고, 타인을 돕고 가르치는 활동에서 깊은 보람을 느낍니다. 공감 능력과 소통 능력이 뛰어나며, 팀 안에서 조율자·중재자 역할을 자연스럽게 맡습니다. 교육·상담·의료·사회복지 분야에서 큰 영향력을 발휘할 수 있습니다.",
+     strength:["공감 능력","소통·조율 능력","팀워크","봉사 정신","교육적 감각"],
+     study:"토론·협력 학습, 실제 사례 중심, 역할극과 현장 경험",
      majors:["교육학","사회복지학","간호학","상담심리학","사회학","아동학","특수교육","보건학"],
      jobs:["교사","사회복지사","간호사","상담사","NGO활동가","유아교육사","의료사회복지사"],stream:"사범/사회/보건계열"},
-  E:{name:"진취형",emoji:"🚀",color:"#F59E0B",desc:"리더십·설득력 발휘. 목표 달성과 조직 운영에 높은 관심",
+  E:{name:"진취형",emoji:"🚀",color:"#F59E0B",
+     desc:"리더십·설득력 발휘. 목표 달성과 조직 운영에 높은 관심",
+     fullDesc:"목표를 향해 적극적으로 나아가고 사람들을 이끄는 것에 강한 동기를 가집니다. 설득력과 추진력이 뛰어나며, 경쟁적 환경에서도 자신감 있게 행동합니다. 사업·법조·정치·경영 등 리더십이 요구되는 분야에서 두각을 나타낼 가능성이 높습니다.",
+     strength:["리더십·추진력","설득·협상 능력","목표 지향성","자신감","전략적 사고"],
+     study:"목표 설정 중심 학습, 발표·토론 활동, 실전 경험과 도전",
      majors:["경영학","법학","정치외교학","행정학","국제학","경제학","창업벤처"],
      jobs:["CEO·창업가","변호사","정치인","마케터","외교관","투자전문가"],stream:"경상/법행정계열"},
-  C:{name:"관습형",emoji:"📊",color:"#14B8A6",desc:"체계적·조직적 업무 선호. 정확성과 신뢰성을 중시",
+  C:{name:"관습형",emoji:"📊",color:"#14B8A6",
+     desc:"체계적·조직적 업무 선호. 정확성과 신뢰성을 중시",
+     fullDesc:"체계와 질서를 중시하고 정확하고 꼼꼼하게 일을 처리하는 능력이 탁월합니다. 규칙과 절차를 충실히 따르며, 숫자·데이터·문서 등 정밀한 업무에서 높은 성과를 발휘합니다. 회계·금융·행정·데이터 분야에서 신뢰받는 전문가가 될 가능성이 높습니다.",
+     strength:["정확성·꼼꼼함","계획·조직 능력","수리 능력","신뢰성·책임감","데이터 분석"],
+     study:"반복 학습과 정리 노트, 문제풀이 중심, 체계적 계획 수립",
      majors:["회계학","세무학","금융보험","경영정보","행정학","통계학","물류학"],
      jobs:["공인회계사","세무사","금융분석가","공무원","데이터분석가","은행원"],stream:"경상/IT계열"},
 };
 const MM={
-  LI:{name:"언어지능",emoji:"📝",color:"#A78BFA",majors:["국어국문학","영어영문학","언론정보학","법학","문예창작"]},
-  LM:{name:"논리수학지능",emoji:"🧮",color:"#60A5FA",majors:["수학","컴퓨터공학","물리학","통계학","경제학"]},
-  SP:{name:"공간지능",emoji:"🗺️",color:"#34D399",majors:["건축학","시각디자인","게임공학","도시공학"]},
-  MU:{name:"음악지능",emoji:"🎵",color:"#F472B6",majors:["음악학","실용음악","음악교육","음향공학"]},
-  BK:{name:"신체운동지능",emoji:"⚡",color:"#FB923C",majors:["체육교육","스포츠과학","물리치료학","무용학"]},
-  IP:{name:"대인관계지능",emoji:"🌟",color:"#4ADE80",majors:["심리학","사회복지학","교육학","경영학"]},
-  IA:{name:"자기이해지능",emoji:"🧠",color:"#818CF8",majors:["심리학","철학","교육학","상담학"]},
-  NA:{name:"자연탐구지능",emoji:"🌿",color:"#2DD4BF",majors:["생명과학","환경공학","수의학","지구과학"]},
+  LI:{name:"언어지능",emoji:"📝",color:"#A78BFA",
+      desc:"언어를 통해 생각을 명확히 표현하고 소통하는 능력",
+      majors:["국어국문학","영어영문학","언론정보학","법학","문예창작"]},
+  LM:{name:"논리수학지능",emoji:"🧮",color:"#60A5FA",
+      desc:"수와 논리로 패턴을 찾고 문제를 분석하는 능력",
+      majors:["수학","컴퓨터공학","물리학","통계학","경제학"]},
+  SP:{name:"공간지능",emoji:"🗺️",color:"#34D399",
+      desc:"공간과 시각 정보를 입체적으로 처리하는 능력",
+      majors:["건축학","시각디자인","게임공학","도시공학"]},
+  MU:{name:"음악지능",emoji:"🎵",color:"#F472B6",
+      desc:"리듬과 멜로디를 감지하고 음악적으로 표현하는 능력",
+      majors:["음악학","실용음악","음악교육","음향공학"]},
+  BK:{name:"신체운동지능",emoji:"⚡",color:"#FB923C",
+      desc:"몸을 정밀하게 조절하고 신체 활동을 즐기는 능력",
+      majors:["체육교육","스포츠과학","물리치료학","무용학"]},
+  IP:{name:"대인관계지능",emoji:"🌟",color:"#4ADE80",
+      desc:"타인의 감정과 의도를 파악하고 관계를 형성하는 능력",
+      majors:["심리학","사회복지학","교육학","경영학"]},
+  IA:{name:"자기이해지능",emoji:"🧠",color:"#818CF8",
+      desc:"자신의 감정·동기·강점을 깊이 이해하는 능력",
+      majors:["심리학","철학","교육학","상담학"]},
+  NA:{name:"자연탐구지능",emoji:"🌿",color:"#2DD4BF",
+      desc:"자연 현상을 관찰하고 생태계를 이해하는 능력",
+      majors:["생명과학","환경공학","수의학","지구과학"]},
 };
 const TM={
   HU:{name:"인문계열",emoji:"📚",color:"#A78BFA"},
@@ -204,98 +270,125 @@ const TM={
   ME:{name:"의약보건계열",emoji:"🏥",color:"#4ADE80"},
 };
 const MBTI_DESC={
-  INTJ:"독창적인 전략가",INTP:"논리적 사색가",ENTJ:"대담한 지도자",ENTP:"혁신적 토론가",
-  INFJ:"통찰력 있는 이상주의자",INFP:"열정적인 가치 탐구자",ENFJ:"정의로운 사회운동가",ENFP:"재기발랄한 활동가",
-  ISTJ:"청렴한 실무자",ISFJ:"헌신적인 수호자",ESTJ:"목표 중심 경영자",ESFJ:"따뜻한 협력자",
-  ISTP:"만능 재주꾼",ISFP:"감각적 예술가",ESTP:"현실 감각 행동가",ESFP:"자유로운 퍼포머",
+  INTJ:"독창적인 전략가 · 체계적 계획과 날카로운 통찰력",
+  INTP:"논리적 사색가 · 원리 탐구와 창의적 분석",
+  ENTJ:"대담한 지도자 · 강력한 추진력과 전략적 리더십",
+  ENTP:"혁신적 토론가 · 아이디어 발산과 도전적 사고",
+  INFJ:"통찰력 있는 이상주의자 · 깊은 공감과 비전 제시",
+  INFP:"열정적인 가치 탐구자 · 진정성과 창의적 표현",
+  ENFJ:"정의로운 사회운동가 · 타인 성장을 이끄는 리더",
+  ENFP:"재기발랄한 활동가 · 넘치는 열정과 창의적 소통",
+  ISTJ:"청렴한 실무자 · 신뢰할 수 있는 책임감과 꼼꼼함",
+  ISFJ:"헌신적인 수호자 · 따뜻한 배려와 성실한 지원",
+  ESTJ:"목표 중심 경영자 · 체계적 조직과 강한 실행력",
+  ESFJ:"따뜻한 협력자 · 조화로운 관계와 헌신적 돌봄",
+  ISTP:"만능 재주꾼 · 현장 감각과 즉각적 문제 해결",
+  ISFP:"감각적 예술가 · 섬세한 감수성과 독창적 표현",
+  ESTP:"현실 감각 행동가 · 빠른 판단과 역동적 실행",
+  ESFP:"자유로운 퍼포머 · 밝은 에너지와 즉흥적 창의성",
+};
+const MBTI_STUDY={
+  J:"계획을 미리 세우고 단계적으로 실행하는 학습이 효과적입니다. 주간·월간 학습 계획표를 작성하고, 목표를 구체적으로 설정하는 방식이 잘 맞습니다.",
+  P:"유연하고 자유로운 학습 환경에서 더 잘 발휘됩니다. 다양한 방법을 시도해보며 자신만의 스타일을 찾는 탐색적 학습이 효과적입니다.",
+  E:"그룹 스터디, 발표·토론 활동을 통해 에너지를 얻으며 학습 효율이 높아집니다. 소리 내어 설명하거나 친구들과 함께하는 방식이 유리합니다.",
+  I:"조용한 환경에서 혼자 집중하는 심화 학습이 효과적입니다. 충분한 사색 시간과 혼자만의 공부 루틴을 확보하는 것이 중요합니다.",
+  T:"논리적 근거와 체계적 분석을 통해 학습합니다. '왜 그런가'를 이해하고 나서 암기하는 방식이 효과적입니다.",
+  F:"의미와 가치를 연결할 때 학습 동기가 높아집니다. 실제 사례나 사람과 연결되는 스토리텔링 학습이 기억에 오래 남습니다.",
+  N:"큰 그림을 먼저 파악하고 세부 사항을 채우는 방식이 맞습니다. 개념 마인드맵, 아이디어 연결, 창의적 프로젝트 활동이 효과적입니다.",
+  S:"구체적인 사실과 경험에서 출발하는 학습이 효과적입니다. 반복 연습, 실습, 예시 중심 학습으로 실력을 쌓아가는 방식이 적합합니다.",
 };
 
 // ═══════════════════════════════════════════════════════════════
 //  ANALYSIS ENGINE
 // ═══════════════════════════════════════════════════════════════
-function analyze(answers,mbtiMode,mbtiKnown){
-  const calcAvg=(qs,dims)=>{
-    const sc={},cnt={};
-    dims.forEach(d=>{sc[d]=0;cnt[d]=0;});
-    qs.forEach(q=>{
-      const v=answers[q.id];
-      if(v!==undefined&&sc[q.d]!==undefined){sc[q.d]+=Number(v);cnt[q.d]++;}
+function analyze(answers, mbtiMode, mbtiKnown) {
+  const calcAvg = (qs, dims) => {
+    const sc={}, cnt={};
+    dims.forEach(d => { sc[d]=0; cnt[d]=0; });
+    qs.forEach(q => {
+      const v = answers[q.id];
+      if (v !== undefined && sc[q.d] !== undefined) { sc[q.d] += Number(v); cnt[q.d]++; }
     });
-    dims.forEach(d=>{if(cnt[d]>0)sc[d]=parseFloat((sc[d]/cnt[d]).toFixed(2));});
-    return Object.entries(sc).sort(([,a],[,b])=>b-a).map(([k,v])=>({key:k,score:v}));
+    dims.forEach(d => { if (cnt[d] > 0) sc[d] = parseFloat((sc[d]/cnt[d]).toFixed(2)); });
+    return Object.entries(sc).sort(([,a],[,b]) => b-a).map(([k,v]) => ({key:k, score:v}));
   };
-  const riasec=calcAvg(RQ,["R","I","A","S","E","C"]);
-  const mi=calcAvg(MQ,["LI","LM","SP","MU","BK","IP","IA","NA"]);
-  const tend=calcAvg(TQ,["HU","SO","SC","EN","AR","ME"]);
-  const vals={};
-  VQ.forEach(q=>{if(answers[q.id]!==undefined)vals[q.d]=Number(answers[q.id]);});
-  const valueTop=Object.entries(vals).sort(([,a],[,b])=>b-a).slice(0,3).map(([k])=>k);
+  const riasec = calcAvg(RQ, ["R","I","A","S","E","C"]);
+  const mi     = calcAvg(MQ, ["LI","LM","SP","MU","BK","IP","IA","NA"]);
+  const tend   = calcAvg(TQ, ["HU","SO","SC","EN","AR","ME"]);
+  const vals = {};
+  VQ.forEach(q => { if (answers[q.id] !== undefined) vals[q.d] = Number(answers[q.id]); });
+  const valueTop = Object.entries(vals).sort(([,a],[,b]) => b-a).slice(0,3).map(([k]) => k);
 
-  let mbtiType="";
-  if(mbtiMode==="input")mbtiType=mbtiKnown.toUpperCase();
-  else if(mbtiMode==="test"){
-    const c={E:0,I:0,S:0,N:0,T:0,F:0,J:0,P:0};
-    BQ.forEach(q=>{const ans=answers[q.id];if(!ans)return;c[ans==="A"?q.av:q.bv]++;});
-    mbtiType=`${c.E>=c.I?"E":"I"}${c.S>=c.N?"S":"N"}${c.T>=c.F?"T":"F"}${c.J>=c.P?"J":"P"}`;
+  let mbtiType = "";
+  if (mbtiMode === "input") mbtiType = mbtiKnown.toUpperCase();
+  else if (mbtiMode === "test") {
+    const c = {E:0,I:0,S:0,N:0,T:0,F:0,J:0,P:0};
+    BQ.forEach(q => { const ans = answers[q.id]; if (!ans) return; c[ans==="A" ? q.av : q.bv]++; });
+    mbtiType = `${c.E>=c.I?"E":"I"}${c.S>=c.N?"S":"N"}${c.T>=c.F?"T":"F"}${c.J>=c.P?"J":"P"}`;
   }
 
-  const r1=riasec[0]?.key,r2=riasec[1]?.key,mi1=mi[0]?.key,mi2=mi[1]?.key,tend1=tend[0]?.key;
-  const majorSet=new Set(),jobSet=new Set();
-  RM[r1]?.majors?.slice(0,4).forEach(m=>majorSet.add(m));
-  RM[r2]?.majors?.slice(0,3).forEach(m=>majorSet.add(m));
-  RM[r1]?.jobs?.slice(0,3).forEach(j=>jobSet.add(j));
-  RM[r2]?.jobs?.slice(0,2).forEach(j=>jobSet.add(j));
-  MM[mi1]?.majors?.slice(0,2).forEach(m=>majorSet.add(m));
-  MM[mi2]?.majors?.slice(0,1).forEach(m=>majorSet.add(m));
+  const r1=riasec[0]?.key, r2=riasec[1]?.key, mi1=mi[0]?.key, mi2=mi[1]?.key, tend1=tend[0]?.key;
+  const majorSet=new Set(), jobSet=new Set();
+  RM[r1]?.majors?.slice(0,4).forEach(m => majorSet.add(m));
+  RM[r2]?.majors?.slice(0,3).forEach(m => majorSet.add(m));
+  RM[r1]?.jobs?.slice(0,3).forEach(j => jobSet.add(j));
+  RM[r2]?.jobs?.slice(0,2).forEach(j => jobSet.add(j));
+  MM[mi1]?.majors?.slice(0,2).forEach(m => majorSet.add(m));
+  MM[mi2]?.majors?.slice(0,1).forEach(m => majorSet.add(m));
 
-  const pts=[];
-  if(r1==="I"&&["LM","NA"].includes(mi1))pts.push("수리·과학 탐구형 → 의약·이공계 연구직 강력 추천");
-  if(r1==="I"&&mi1==="LI")pts.push("인문·사회 연구 성향 → 심리학·사회과학 탐색");
-  if(r1==="A"&&mi1==="SP")pts.push("시각적 창의력 우수 → 디자인·건축·영상 분야 적합");
-  if(r1==="A"&&mi1==="MU")pts.push("음악·퍼포먼스 두드러짐 → 실용음악·공연예술 탐색");
-  if(r1==="S"&&mi1==="IP")pts.push("대인관계 탁월 → 교육·상담·사회복지 분야 강점");
-  if(r1==="E"&&mi1==="LI")pts.push("리더십 + 언어능력 → 법·경영·정치외교 적합");
-  if(r1==="R"&&mi1==="LM")pts.push("공학적 사고 강함 → SW·기계·전자공학 추천");
-  if(r1==="C"&&mi1==="LM")pts.push("분석·수리 능력 → 금융·회계·통계·행정 적합");
-  if(pts.length===0)pts.push(`${RM[r1]?.name} + ${MM[mi1]?.name} 조합 → ${RM[r1]?.stream} 심화 탐색 권장`);
-  if(mbtiType.includes("J"))pts.push("J형: 체계적 학습계획 수립이 강점 — 목표 기반 설계 추천");
-  if(mbtiType.includes("P"))pts.push("P형: 탐색적 학습 스타일 — 다양한 체험 후 방향 좁혀가는 전략 적합");
-  if(mbtiType.includes("N"))pts.push("N형: 아이디어·창의성 중심 직군 높은 적합도");
-  if(mbtiType.includes("T"))pts.push("T형: 논리·분석 기반 직군 적합도 상승");
-  if(mbtiType.includes("F"))pts.push("F형: 대인서비스·교육·상담 계열 높은 만족도 예상");
+  const pts = [];
+  if (r1==="I" && ["LM","NA"].includes(mi1)) pts.push("수리·과학 탐구형 → 의약·이공계 연구직 강력 추천");
+  if (r1==="I" && mi1==="LI") pts.push("인문·사회 연구 성향 → 심리학·사회과학 탐색 권장");
+  if (r1==="A" && mi1==="SP") pts.push("시각적 창의력 우수 → 디자인·건축·영상 분야 적합");
+  if (r1==="A" && mi1==="MU") pts.push("음악·퍼포먼스 두드러짐 → 실용음악·공연예술 탐색");
+  if (r1==="S" && mi1==="IP") pts.push("대인관계 탁월 → 교육·상담·사회복지 분야 강점");
+  if (r1==="E" && mi1==="LI") pts.push("리더십 + 언어능력 → 법·경영·정치외교 적합");
+  if (r1==="R" && mi1==="LM") pts.push("공학적 사고 강함 → SW·기계·전자공학 추천");
+  if (r1==="C" && mi1==="LM") pts.push("분석·수리 능력 → 금융·회계·통계·행정 적합");
+  if (pts.length === 0) pts.push(`${RM[r1]?.name} + ${MM[mi1]?.name} 조합 → ${RM[r1]?.stream} 심화 탐색 권장`);
+  if (mbtiType.includes("J")) pts.push("J형: 체계적 학습계획 수립이 강점 — 목표 기반 진로 설계 추천");
+  if (mbtiType.includes("P")) pts.push("P형: 탐색적 학습 스타일 — 다양한 체험 후 방향 좁혀가는 전략 적합");
+  if (mbtiType.includes("N")) pts.push("N형: 아이디어·창의성 중심 직군 높은 적합도");
+  if (mbtiType.includes("T")) pts.push("T형: 논리·분석 기반 직군(이공계·법·금융) 적합도 상승");
+  if (mbtiType.includes("F")) pts.push("F형: 대인서비스·교육·상담 계열 높은 직업 만족도 예상");
 
-  const acts=[];
-  if(["I","R"].includes(r1))acts.push(...["과학탐구대회","R&E 프로젝트","코딩·SW 동아리"]);
-  if(r1==="A")acts.push(...["예술·창작 동아리","교지편집부","영상제작 동아리"]);
-  if(r1==="S")acts.push(...["교육봉사","멘토링 프로그램","사회복지 동아리"]);
-  if(r1==="E")acts.push(...["학생회","창업 동아리","교내 토론대회"]);
-  if(r1==="C")acts.push(...["수학올림피아드","경제·금융 동아리","자격증 준비"]);
-  if(acts.length<3)acts.push("독서토론","진로체험","교내 발표 활동");
+  // 종합 요약문 생성
+  const summary = `${RM[r1]?.name}(${r1})과 ${RM[r2]?.name}(${r2})의 복합 성향을 가진 ${info_placeholder}님은 ${RM[r1]?.fullDesc?.split('.')[0]}. 다중지능 측면에서는 ${MM[mi1]?.name}이 특히 두드러지며, 이는 ${MM[mi1]?.desc}에서 강점을 보임을 의미합니다. 계열 성향으로는 ${TM[tend1]?.name}에 가장 강한 흥미를 보이고 있어, 향후 진로 선택 시 이 방향을 중심으로 탐색하는 것이 효과적입니다.`;
 
-  return{riasec,mi,tend,valueTop,mbtiType,r1,r2,mi1,mi2,tend1,
-    cross:{majors:[...majorSet].slice(0,10),jobs:[...jobSet].slice(0,8),pts,acts}};
+  const acts = [];
+  if (["I","R"].includes(r1)) acts.push(...["과학탐구대회","R&E 프로젝트","코딩·SW 동아리"]);
+  if (r1==="A") acts.push(...["예술·창작 동아리","교지편집부","영상제작 동아리"]);
+  if (r1==="S") acts.push(...["교육봉사","멘토링 프로그램","사회복지 동아리"]);
+  if (r1==="E") acts.push(...["학생회","창업 동아리","교내 토론대회"]);
+  if (r1==="C") acts.push(...["수학올림피아드","경제·금융 동아리","자격증 준비"]);
+  if (acts.length < 3) acts.push("독서토론","진로체험","교내 발표 활동");
+
+  return { riasec, mi, tend, valueTop, mbtiType, r1, r2, mi1, mi2, tend1,
+    cross: { majors:[...majorSet].slice(0,10), jobs:[...jobSet].slice(0,8), pts, acts, summary } };
 }
+// 더미 변수 (실제 사용시 info.name 주입)
+const info_placeholder = "학생";
 
 // ═══════════════════════════════════════════════════════════════
-//  SVG / CHART COMPONENTS
+//  SVG / CHART
 // ═══════════════════════════════════════════════════════════════
-function Radar({items,size=180}){
-  const cx=size/2,cy=size/2,r=size*.33,n=items.length;
-  const ang=i=>(i*2*Math.PI/n)-Math.PI/2;
-  const pt=(i,v)=>[cx+r*(v/5)*Math.cos(ang(i)),cy+r*(v/5)*Math.sin(ang(i))];
-  const poly=items.map((it,i)=>pt(i,it.score).join(",")).join(" ");
-  return(
+function Radar({items, size=180}) {
+  const cx=size/2, cy=size/2, r=size*.33, n=items.length;
+  const ang = i => (i*2*Math.PI/n)-Math.PI/2;
+  const pt  = (i,v) => [cx+r*(v/5)*Math.cos(ang(i)), cy+r*(v/5)*Math.sin(ang(i))];
+  const poly = items.map((it,i) => pt(i,it.score).join(",")).join(" ");
+  return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{overflow:"visible"}}>
       {[.25,.5,.75,1].map(lv=>(
         <polygon key={lv} fill="none" stroke="rgba(167,139,250,0.1)" strokeWidth="1"
-          points={items.map((_,i)=>[cx+r*lv*Math.cos(ang(i)),cy+r*lv*Math.sin(ang(i))].join(",")).join(" ")}/>
+          points={items.map((_,i) => [cx+r*lv*Math.cos(ang(i)),cy+r*lv*Math.sin(ang(i))].join(",")).join(" ")}/>
       ))}
-      {items.map((_,i)=><line key={i} x1={cx} y1={cy} x2={cx+r*Math.cos(ang(i))} y2={cy+r*Math.sin(ang(i))} stroke="rgba(167,139,250,0.07)" strokeWidth="1"/>)}
+      {items.map((_,i) => <line key={i} x1={cx} y1={cy} x2={cx+r*Math.cos(ang(i))} y2={cy+r*Math.sin(ang(i))} stroke="rgba(167,139,250,0.07)" strokeWidth="1"/>)}
       <polygon points={poly} fill="rgba(109,33,176,0.18)" stroke="#7C3AED" strokeWidth="1.5"/>
-      {items.map((it,i)=>{const[x,y]=pt(i,it.score);return<circle key={i} cx={x} cy={y} r="3.5" fill="#A78BFA"/>;}) }
-      {items.map((it,i)=>{
-        const lr=r+20,lx=cx+lr*Math.cos(ang(i)),ly=cy+lr*Math.sin(ang(i));
-        return(<g key={i}>
+      {items.map((it,i) => { const [x,y]=pt(i,it.score); return <circle key={i} cx={x} cy={y} r="3.5" fill="#A78BFA"/>; })}
+      {items.map((it,i) => {
+        const lr=r+20, lx=cx+lr*Math.cos(ang(i)), ly=cy+lr*Math.sin(ang(i));
+        return (<g key={i}>
           <text x={lx} y={ly-3} textAnchor="middle" fontSize="11" fill="rgba(215,205,255,.8)">{it.emoji}</text>
           <text x={lx} y={ly+9} textAnchor="middle" fontSize="6.5" fill="rgba(170,150,220,.6)">{it.label}</text>
         </g>);
@@ -303,8 +396,8 @@ function Radar({items,size=180}){
     </svg>
   );
 }
-function Bar({label,score,rank,color}){
-  return(
+function Bar({label, score, rank, color}) {
+  return (
     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
       <div style={{flex:1}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
@@ -319,26 +412,18 @@ function Bar({label,score,rank,color}){
     </div>
   );
 }
-
-// ═══════════════════════════════════════════════════════════════
-//  DELETE ROW  (🗑 버튼 항상 표시)
-// ═══════════════════════════════════════════════════════════════
-function DelRow({children,onDelete}){
+function DelRow({children, onDelete}) {
   const [confirm,setConfirm]=useState(false);
-  return(
-    <div style={{display:"flex",alignItems:"stretch",gap:0,marginBottom:2,borderRadius:10,overflow:"hidden",
-      background:"rgba(255,255,255,.025)"}}>
+  return (
+    <div style={{display:"flex",alignItems:"stretch",gap:0,marginBottom:2,borderRadius:10,overflow:"hidden",background:"rgba(255,255,255,.025)"}}>
       <div style={{flex:1,minWidth:0}}>{children}</div>
-      <button
-        onClick={()=>{if(confirm)onDelete();else{setConfirm(true);setTimeout(()=>setConfirm(false),2500);}}}
+      <button onClick={()=>{if(confirm)onDelete();else{setConfirm(true);setTimeout(()=>setConfirm(false),2500);}}}
         style={{flexShrink:0,width:48,border:"none",cursor:"pointer",transition:"all .18s",
           background:confirm?"rgba(239,68,68,.25)":"rgba(255,255,255,.03)",
           borderLeft:"1px solid rgba(255,255,255,.06)",
           display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2}}>
         <span style={{fontSize:16}}>{confirm?"❗":"🗑"}</span>
-        <span style={{fontSize:8.5,color:confirm?"#FCA5A5":"rgba(180,160,220,.35)",fontWeight:600,letterSpacing:.3}}>
-          {confirm?"확인":"삭제"}
-        </span>
+        <span style={{fontSize:8.5,color:confirm?"#FCA5A5":"rgba(180,160,220,.35)",fontWeight:600,letterSpacing:.3}}>{confirm?"확인":"삭제"}</span>
       </button>
     </div>
   );
@@ -354,8 +439,8 @@ html,body{min-height:100vh;background:#060412;}
 ::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-thumb{background:rgba(124,58,237,.3);border-radius:99px;}
 .root{min-height:100vh;padding:28px 16px;
   background:radial-gradient(ellipse 70% 50% at 50% -5%,rgba(109,33,176,.22) 0%,transparent 55%),
-    radial-gradient(ellipse 50% 35% at 85% 85%,rgba(49,46,129,.12) 0%,transparent 45%),
-    linear-gradient(160deg,#060412 0%,#0C0820 55%,#080518 100%);
+  radial-gradient(ellipse 50% 35% at 85% 85%,rgba(49,46,129,.12) 0%,transparent 45%),
+  linear-gradient(160deg,#060412 0%,#0C0820 55%,#080518 100%);
   font-family:'Noto Sans KR',sans-serif;color:#F0EEFF;
   display:flex;align-items:center;justify-content:center;}
 .root.top{align-items:flex-start;padding-top:36px;}
@@ -468,10 +553,7 @@ h2{font-family:'Gmarket Sans',sans-serif;font-size:20px;font-weight:700;color:#E
   font-family:'Gmarket Sans',sans-serif;font-weight:600;color:rgba(200,185,255,.55);background:transparent;transition:all .2s;}
 .tab.on{background:rgba(109,33,176,.45);color:#DDD6FE;}
 
-/* Swipe row inner */
 .srow-in{display:flex;align-items:center;padding:12px;gap:12px;border-bottom:1px solid rgba(255,255,255,.04);}
-
-/* Code badge */
 .code-badge{font-family:'Gmarket Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;
   padding:3px 10px;border-radius:6px;background:rgba(109,33,176,.15);border:1px solid rgba(167,139,250,.2);color:#A78BFA;}
 .status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
@@ -487,17 +569,63 @@ h2{font-family:'Gmarket Sans',sans-serif;font-size:20px;font-weight:700;color:#E
 .fu{animation:fu .4s ease;}
 @keyframes fl{from{opacity:0;transform:translateX(16px);}to{opacity:1;transform:translateX(0);}}
 .fl{animation:fl .25s ease;}
-
 .hint{font-size:10px;color:rgba(160,140,220,.4);line-height:1.7;text-align:center;margin-top:12px;}
 
+/* ── 강점 태그 ── */
+.strength-tag{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;font-size:12px;
+  background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);color:#6EE7B7;margin:3px;}
+
+/* ── PDF / PRINT ── */
 @media print{
+  @page{size:A4;margin:15mm 18mm;}
   .no-print{display:none!important;}
-  .root{background:white!important;padding:0;}
-  .card{background:white!important;border:none!important;box-shadow:none!important;padding:24px!important;color:#1a1a2e!important;}
-  h1,h2,.r-code{-webkit-text-fill-color:#1a1a2e!important;color:#1a1a2e!important;}
-  .muted,.sec-t{color:#555!important;}
-  .tag,.pill{background:#f0f0ff!important;border-color:#ccc!important;color:#333!important;}
-  .adv{background:#f5f4ff!important;border-color:#ccc!important;}
+  body,html{background:white!important;}
+  .root{background:white!important;padding:0;display:block;}
+  .card,.card.wide{background:white!important;border:none!important;box-shadow:none!important;
+    padding:0!important;max-width:100%!important;border-radius:0!important;color:#1a1529!important;}
+
+  /* 프린트 헤더 */
+  .print-header{display:flex!important;align-items:center;justify-content:space-between;
+    border-bottom:3px solid #7C3AED;padding-bottom:12px;margin-bottom:20px;}
+  .print-header-logo{font-family:'Gmarket Sans',sans-serif;font-size:22px;font-weight:700;color:#7C3AED;}
+  .print-header-info{font-size:10px;color:#888;text-align:right;line-height:1.8;}
+
+  h1,h2{color:#1a1529!important;-webkit-text-fill-color:#1a1529!important;}
+  h2{font-size:14px!important;border-bottom:1px solid #e0d8ff;padding-bottom:6px;margin-bottom:10px;}
+  .r-code{font-size:36px!important;-webkit-text-fill-color:#7C3AED!important;color:#7C3AED!important;}
+  .muted,.sec-t{color:#666!important;}
+  .tag,.pill,.badge,.strength-tag{background:#f0ebff!important;border-color:#c4b5fd!important;color:#5b21b6!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .tag.hi{background:#ede9fe!important;color:#4c1d95!important;}
+  .adv{background:#f5f0ff!important;border:1px solid #c4b5fd!important;color:#3b0764!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .adv strong{color:#5b21b6!important;}
+  .div{background:#e0d8ff!important;}
+  .logo-name .p{color:#7C3AED!important;-webkit-text-fill-color:#7C3AED!important;}
+  .logo-name .t{color:#64748B!important;-webkit-text-fill-color:#64748B!important;}
+  .logo-tag{color:#888!important;}
+  .logo-box{background:linear-gradient(140deg,#6B21A8,#9333EA)!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+
+  /* 바 차트 */
+  .bar-fill{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .radar-svg polygon[fill]{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+
+  .print-section{page-break-inside:avoid;}
+  .print-page-break{page-break-before:always;}
+
+  /* 학생 카드 */
+  .student-card{background:#f5f0ff!important;border:2px solid #7C3AED!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .student-name{color:#3b0764!important;}
+  .student-meta{color:#555!important;}
+
+  /* 타입 설명 박스 */
+  .type-desc-box{background:#faf7ff!important;border-left:4px solid #7C3AED!important;padding:12px 16px!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .type-desc-text{color:#3b0764!important;font-size:12px!important;}
+
+  /* MBTI 박스 */
+  .mbti-box{background:#ede9fe!important;border:1px solid #7C3AED!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .mbti-type{color:#5b21b6!important;-webkit-text-fill-color:#5b21b6!important;}
+
+  /* 섹션 라벨 */
+  .sec-label{background:#7C3AED!important;color:white!important;padding:3px 10px!important;border-radius:4px!important;font-size:10px!important;font-weight:700!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 }
 @media(max-width:500px){
   .card{padding:26px 16px;border-radius:20px;}
@@ -514,18 +642,15 @@ const SECS=[
   {key:"mbti_test",label:"성격 유형",sub:"MBTI",icon:"🪪",qs:BQ,type:"ab"},
 ];
 const SCALE=[
-  {v:1,e:"😑",t:"전혀\n아니다"},
-  {v:2,e:"🙁",t:"아닌\n편이다"},
-  {v:3,e:"😐",t:"보통\n이다"},
-  {v:4,e:"🙂",t:"그런\n편이다"},
-  {v:5,e:"😄",t:"매우\n그렇다"},
+  {v:1,e:"😑",t:"전혀\n아니다"},{v:2,e:"🙁",t:"아닌\n편이다"},{v:3,e:"😐",t:"보통\n이다"},
+  {v:4,e:"🙂",t:"그런\n편이다"},{v:5,e:"😄",t:"매우\n그렇다"},
 ];
 const MBTI_TYPES=["INTJ","INTP","ENTJ","ENTP","INFJ","INFP","ENFJ","ENFP","ISTJ","ISFJ","ESTJ","ESFJ","ISTP","ISFP","ESTP","ESFP"];
 
 // ═══════════════════════════════════════════════════════════════
 //  MAIN APP
 // ═══════════════════════════════════════════════════════════════
-function App(){
+function App() {
   const [view,setView]=useState("loading");
   const [token,setToken]=useState(null);
   const [tokenData,setTokenData]=useState(null);
@@ -550,12 +675,10 @@ function App(){
   const toastRef=useRef();
 
   const showToast=msg=>{setToast(msg);clearTimeout(toastRef.current);toastRef.current=setTimeout(()=>setToast(""),2600);};
-
   const activeSecs=mbtiMode==="test"?SECS:SECS.filter(s=>s.key!=="mbti_test");
   const curSec=activeSecs[secIdx];
   const curQ=curSec?.qs[qIdx];
 
-  // ── URL routing ──
   useEffect(()=>{
     (async()=>{
       const cfg=await S.get(K.cfg());
@@ -579,7 +702,6 @@ function App(){
     })();
   },[]);
 
-  // ── Answer handlers ──
   function advance(newAns){
     if(qIdx<curSec.qs.length-1){setQIdx(q=>q+1);}
     else if(secIdx<activeSecs.length-1){setSecIdx(s=>s+1);setQIdx(0);}
@@ -611,7 +733,6 @@ function App(){
     setView("done");
   }
 
-  // ── Admin ──
   async function adminLogin(){
     if(adminPw===APW){setAdminAuth(true);setAdminErr(false);await loadAdmin();}
     else setAdminErr(true);
@@ -636,8 +757,7 @@ function App(){
   async function deleteRecord(t){
     await S.del(K.link(t));
     const ll=await S.get(K.links())||[];
-    const next=ll.filter(k=>k!==t);
-    await S.set(K.links(),next);
+    await S.set(K.links(),ll.filter(k=>k!==t));
     await loadAdmin();
     showToast("🗑 삭제되었습니다.");
   }
@@ -652,13 +772,11 @@ function App(){
     reader.readAsDataURL(file);
   }
 
-  // ── URL helpers ──
   const baseUrl=()=>{try{const u=new URL(window.location.href);u.hash="";return u.toString();}catch{return "";}}
   const testUrl=t=>`${baseUrl()}#${encodeURIComponent(t)}`;
   const resultUrl=t=>`${baseUrl()}#r/${encodeURIComponent(t)}`;
   const copyLink=(url)=>{try{navigator.clipboard.writeText(url);showToast("🔗 링크가 복사되었습니다!");}catch{showToast(url);}};
 
-  // ── Logo component ──
   const LogoRow=()=>(
     <div className="logo-row">
       <div className="logo-box">{logo?<img src={logo} alt="logo"/>:"✦"}</div>
@@ -688,25 +806,19 @@ function App(){
     );
   };
 
-  // ════════════════════════════════
-  //  RENDER
-  // ════════════════════════════════
-  return(
+  return (
     <>
     <style>{CSS}</style>
     {toast&&<div className="toast no-print">{toast}</div>}
 
-    {/* LOADING */}
     {view==="loading"&&<div className="root"><div className="card fu"><LogoRow/><p className="muted">불러오는 중...</p></div></div>}
 
-    {/* HOME */}
     {view==="home"&&(
       <div className="root"><div className="card fu">
         <LogoRow/>
         <h1>나의 진로를<br/>발견하는 여정</h1>
-        <p className="muted">
-          선생님께 받은 링크를 클릭하면<br/>바로 검사가 시작됩니다.
-        </p>
+        <p className="muted">선생님께 받은 링크를 클릭하면<br/>바로 검사가 시작됩니다.</p>
+        {!sbReady&&<div style={{padding:"10px 14px",borderRadius:10,background:"rgba(245,158,11,.08)",border:"1px solid rgba(245,158,11,.2)",fontSize:12,color:"rgba(253,211,77,.7)",marginBottom:16}}>⚠️ Supabase 미연결 — 로컬 저장 모드</div>}
         <div style={{marginTop:20,textAlign:"center"}}>
           <button className="btn-g btn btn-sm" style={{margin:"0 auto"}}
             onClick={()=>{window.location.hash="admin";setView("admin");}}>🔐 관리자</button>
@@ -714,7 +826,6 @@ function App(){
       </div></div>
     )}
 
-    {/* START (token valid) */}
     {view==="start"&&(
       <div className="root"><div className="card fu">
         <LogoRow/>
@@ -733,7 +844,6 @@ function App(){
       </div></div>
     )}
 
-    {/* ALREADY USED */}
     {view==="already"&&(
       <div className="root"><div className="card fu">
         <LogoRow/>
@@ -746,29 +856,24 @@ function App(){
       </div></div>
     )}
 
-    {/* INFO — 학생 정보 입력 */}
     {view==="info"&&(
       <div className="root"><div className="card fu">
         <LogoRow/>
         <h2>기본 정보 입력</h2>
         <p className="muted">정확한 분석을 위해 아래 정보를 모두 입력해 주세요.</p>
-
         <div className="inp-g">
           <div className="inp-l">학생 이름 *</div>
           <input className="inp" placeholder="홍길동" value={info.name} onChange={e=>setInfo({...info,name:e.target.value})}/>
-          {tokenData?.label && info.name && info.name.trim() !== tokenData.label.trim() && (
-            <div style={{marginTop:7,padding:"8px 12px",borderRadius:9,background:"rgba(239,68,68,.12)",
-              border:"1px solid rgba(239,68,68,.25)",fontSize:12.5,color:"#FCA5A5"}}>
+          {tokenData?.label&&info.name&&info.name.trim()!==tokenData.label.trim()&&(
+            <div style={{marginTop:7,padding:"8px 12px",borderRadius:9,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.25)",fontSize:12.5,color:"#FCA5A5"}}>
               ⚠️ 학생 정보가 다릅니다. 선생님께 받은 이름을 정확히 입력해 주세요.
             </div>
           )}
         </div>
-
         <div className="inp-g">
           <div className="inp-l">학교명</div>
           <input className="inp" placeholder="예) 필탑중학교" value={info.school} onChange={e=>setInfo({...info,school:e.target.value})}/>
         </div>
-
         <div className="inp-g">
           <div className="inp-l" style={{marginBottom:10}}>학년 *</div>
           <div className="g-grid">
@@ -777,20 +882,16 @@ function App(){
             ))}
           </div>
         </div>
-
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <div className="inp-g" style={{marginBottom:0}}>
             <div className="inp-l">학생 연락처</div>
-            <input className="inp" placeholder="010-0000-0000" value={info.studentPhone}
-              onChange={e=>setInfo({...info,studentPhone:e.target.value})}/>
+            <input className="inp" placeholder="010-0000-0000" value={info.studentPhone} onChange={e=>setInfo({...info,studentPhone:e.target.value})}/>
           </div>
           <div className="inp-g" style={{marginBottom:0}}>
             <div className="inp-l">학부모 연락처</div>
-            <input className="inp" placeholder="010-0000-0000" value={info.parentPhone}
-              onChange={e=>setInfo({...info,parentPhone:e.target.value})}/>
+            <input className="inp" placeholder="010-0000-0000" value={info.parentPhone} onChange={e=>setInfo({...info,parentPhone:e.target.value})}/>
           </div>
         </div>
-
         <div className="btn-row" style={{marginTop:22}}>
           <button className="btn btn-g" onClick={()=>setView("start")}>← 이전</button>
           <button className="btn" disabled={!info.name||!info.grade||(tokenData?.label&&info.name.trim()!==tokenData.label.trim())} onClick={()=>setView("mbti_choice")}>다음 →</button>
@@ -798,7 +899,6 @@ function App(){
       </div></div>
     )}
 
-    {/* MBTI CHOICE */}
     {view==="mbti_choice"&&(
       <div className="root"><div className="card fu">
         <LogoRow/>
@@ -824,7 +924,6 @@ function App(){
       </div></div>
     )}
 
-    {/* MBTI INPUT */}
     {view==="mbti_input"&&(
       <div className="root"><div className="card fu">
         <LogoRow/>
@@ -834,8 +933,7 @@ function App(){
             <button key={t} className={`g-btn ${mbtiKnown===t?"sel":""}`} style={{padding:"12px 4px",fontSize:12}} onClick={()=>setMbtiKnown(t)}>{t}</button>
           ))}
         </div>
-        {mbtiKnown&&<div style={{marginBottom:16,padding:"10px 16px",borderRadius:10,
-          background:"rgba(109,33,176,.12)",border:"1px solid rgba(167,139,250,.2)",fontSize:13,color:"#C4B5FD"}}>
+        {mbtiKnown&&<div style={{marginBottom:16,padding:"10px 16px",borderRadius:10,background:"rgba(109,33,176,.12)",border:"1px solid rgba(167,139,250,.2)",fontSize:13,color:"#C4B5FD"}}>
           {mbtiKnown} — {MBTI_DESC[mbtiKnown]}
         </div>}
         <div className="btn-row">
@@ -845,7 +943,6 @@ function App(){
       </div></div>
     )}
 
-    {/* TEST */}
     {view==="test"&&curSec&&curQ&&(
       <div className="root"><div className="card">
         <LogoRow/>
@@ -887,7 +984,6 @@ function App(){
       </div></div>
     )}
 
-    {/* DONE */}
     {view==="done"&&(
       <div className="root"><div className="card fu">
         <LogoRow/>
@@ -900,26 +996,26 @@ function App(){
             결과는 담당 선생님이 먼저 검토한 후<br/>
             상담 시 함께 안내해 드립니다 🙏
           </p>
-          <div style={{padding:"14px 18px",borderRadius:12,background:"rgba(109,33,176,.1)",
-            border:"1px solid rgba(167,139,250,.18)",fontSize:13,color:"rgba(195,185,255,.7)",lineHeight:1.8,marginBottom:22}}>
+          <div style={{padding:"14px 18px",borderRadius:12,background:"rgba(109,33,176,.1)",border:"1px solid rgba(167,139,250,.18)",fontSize:13,color:"rgba(195,185,255,.7)",lineHeight:1.8,marginBottom:22}}>
             📞 문의·상담 예약은 담당 선생님께 연락해 주세요
           </div>
         </div>
       </div></div>
     )}
 
-    {/* RESULT PUBLIC */}
     {view==="result_pub"&&selSub&&(
       <ResultView sub={selSub} logo={logo} isPublic
         onBack={()=>{setSelSub(null);setView("home");window.location.hash="";}}
         onPrint={()=>window.print()}/>
     )}
 
-    {/* ADMIN */}
     {view==="admin"&&!adminAuth&&(
       <div className="root"><div className="card fu" style={{maxWidth:400}}>
         <LogoRow/>
         <h2>관리자 로그인</h2>
+        {!sbReady&&<div style={{padding:"10px 14px",borderRadius:10,background:"rgba(245,158,11,.08)",border:"1px solid rgba(245,158,11,.2)",fontSize:12,color:"rgba(253,211,77,.7)",marginBottom:16,lineHeight:1.7}}>
+          ⚠️ Supabase 미연결 상태입니다.<br/>데이터가 이 기기에만 저장됩니다.
+        </div>}
         <div className="inp-g" style={{marginTop:16}}>
           <div className="inp-l">비밀번호</div>
           <input className="inp" type="password" placeholder="••••••••" value={adminPw}
@@ -934,12 +1030,12 @@ function App(){
       </div></div>
     )}
 
-    {/* ADMIN DASHBOARD */}
     {view==="admin"&&adminAuth&&!selSub&&(
       <div className="root top"><div className="card wide">
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}} className="no-print">
           <LogoRow/>
           <div style={{display:"flex",gap:8}}>
+            {sbReady&&<span style={{fontSize:11,color:"#34D399",display:"flex",alignItems:"center",gap:4}}>🟢 Supabase 연결됨</span>}
             <button className="btn btn-g btn-sm" onClick={loadAdmin}>🔄</button>
             <button className="btn btn-g btn-sm" onClick={()=>{setAdminAuth(false);setAdminPw("");window.location.hash="";}}>로그아웃</button>
           </div>
@@ -951,7 +1047,6 @@ function App(){
           ))}
         </div>
 
-        {/* ── 제출 결과 탭 ── */}
         {adminTab==="subs"&&(
           <>
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:22}}>
@@ -969,16 +1064,16 @@ function App(){
               {subs.map(s=>(
                 <DelRow key={s.id} onDelete={()=>deleteRecord(s.token||s.id)}>
                   <div className="srow-in" style={{cursor:"pointer"}} onClick={()=>setSelSub(s)}>
-                    <div style={{width:36,height:36,borderRadius:10,background:"rgba(109,33,176,.18)",
-                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>👤</div>
+                    <div style={{width:36,height:36,borderRadius:10,background:"rgba(109,33,176,.18)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>👤</div>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
                         <span style={{fontFamily:"'Gmarket Sans',sans-serif",fontWeight:700,color:"#C4B5FD",fontSize:15}}>{s.info?.name}</span>
                         <span style={{fontSize:11,color:"rgba(170,150,220,.5)"}}>{s.info?.grade}</span>
                         <span style={{fontFamily:"'Gmarket Sans',sans-serif",fontSize:12,color:"#A78BFA",fontWeight:700}}>{s.r1}{s.r2}형</span>
+                        {s.mbtiType&&<span style={{fontSize:11,color:"rgba(167,139,250,.6)"}}>{s.mbtiType}</span>}
                       </div>
                       <div style={{fontSize:11,color:"rgba(150,130,190,.45)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                        {s.info?.school||""}{s.mbtiType?` · ${s.mbtiType}`:""} · {s.submittedAt}
+                        {s.info?.school||""} · {s.submittedAt}
                       </div>
                     </div>
                     <div style={{fontSize:11,color:"rgba(167,139,250,.4)"}}>›</div>
@@ -990,22 +1085,17 @@ function App(){
           </>
         )}
 
-        {/* ── 링크 관리 탭 ── */}
         {adminTab==="links"&&(
           <>
           <h2 style={{marginBottom:8}}>링크 생성</h2>
-          <p className="muted" style={{fontSize:13}}>
-            검사를 진행할 학생 이름을 입력하고 링크를 생성하세요.<br/>
-            생성된 링크는 1인 전용이며, 한 번 제출되면 자동으로 잠깁니다.
-          </p>
+          <p className="muted" style={{fontSize:13}}>학생 이름을 입력하고 링크를 생성하세요. 1인 전용, 한 번 제출되면 자동으로 잠깁니다.</p>
           <div style={{display:"flex",gap:8,marginBottom:8}}>
-            <input className="inp" placeholder="학생 이름 또는 메모" value={newLabel}
+            <input className="inp" placeholder="학생 이름" value={newLabel}
               onChange={e=>setNewLabel(e.target.value)}
               onKeyDown={e=>e.key==="Enter"&&createLink()} style={{flex:1}}/>
             <button className="btn btn-sm" style={{flex:"none"}} onClick={createLink}>+ 생성</button>
           </div>
-          <p className="hint" style={{marginBottom:20,textAlign:"left"}}>링크 복사 후 카카오톡·문자로 학생에게 전송하세요. 제출 완료 시 결과링크가 활성화됩니다.</p>
-
+          <p className="hint" style={{marginBottom:20,textAlign:"left"}}>링크 복사 후 카카오톡·문자로 학생에게 전송하세요.</p>
           {links.length===0?(
             <div style={{textAlign:"center",padding:"30px 0",color:"rgba(160,140,220,.3)",fontSize:14}}>생성된 링크가 없습니다.</div>
           ):(
@@ -1022,12 +1112,8 @@ function App(){
                       <div style={{fontSize:11,color:"rgba(150,130,190,.45)"}}>{d.createdAt}</div>
                     </div>
                     <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
-                      <button className="btn btn-sm" style={{padding:"6px 12px",fontSize:11}}
-                        onClick={()=>copyLink(testUrl(d.token))}>🔗 링크 복사</button>
-                      {d.status==="used"&&(
-                        <button className="btn btn-g btn-sm" style={{padding:"6px 12px",fontSize:11}}
-                          onClick={()=>copyLink(resultUrl(d.token))}>📊 결과링크</button>
-                      )}
+                      <button className="btn btn-sm" style={{padding:"6px 12px",fontSize:11}} onClick={()=>copyLink(testUrl(d.token))}>🔗 링크 복사</button>
+                      {d.status==="used"&&<button className="btn btn-g btn-sm" style={{padding:"6px 12px",fontSize:11}} onClick={()=>copyLink(resultUrl(d.token))}>📊 결과링크</button>}
                     </div>
                   </div>
                 </DelRow>
@@ -1037,42 +1123,49 @@ function App(){
           </>
         )}
 
-        {/* ── 설정 탭 ── */}
         {adminTab==="settings"&&(
           <>
+          <h2 style={{marginBottom:8}}>Supabase 연결 상태</h2>
+          <div style={{padding:"14px 18px",borderRadius:12,marginBottom:20,
+            background:sbReady?"rgba(52,211,153,.08)":"rgba(245,158,11,.08)",
+            border:`1px solid ${sbReady?"rgba(52,211,153,.2)":"rgba(245,158,11,.2)"}`,
+            fontSize:13,lineHeight:2,color:sbReady?"rgba(110,231,183,.8)":"rgba(253,211,77,.7)"}}>
+            {sbReady?<>🟢 Supabase 연결됨 — 모든 기기에서 데이터 공유 가능</>:<>
+              ⚠️ Supabase 미연결 상태<br/>
+              <strong style={{color:"rgba(253,211,77,.9)"}}>연결 방법:</strong><br/>
+              1. supabase.com → 새 프로젝트 생성<br/>
+              2. SQL Editor에서 아래 쿼리 실행:<br/>
+              <code style={{background:"rgba(0,0,0,.2)",padding:"4px 8px",borderRadius:6,fontSize:11,display:"block",marginTop:6}}>
+                create table piltop_data (key text primary key, value jsonb, updated_at timestamptz);
+                alter table piltop_data enable row level security;
+                create policy "allow all" on piltop_data for all using (true) with check (true);
+              </code><br/>
+              3. Project Settings → API에서 URL과 anon key 복사<br/>
+              4. index.html 상단 SUPABASE_URL, SUPABASE_KEY에 붙여넣기 → GitHub 업로드
+            </>}
+          </div>
+
           <h2 style={{marginBottom:8}}>학원 로고</h2>
-          <p className="muted">검사 화면 상단에 표시될 로고를 업로드하세요.</p>
           <div style={{display:"flex",alignItems:"center",gap:20,marginBottom:28}}>
-            <div style={{width:80,height:80,borderRadius:16,overflow:"hidden",
-              background:"linear-gradient(140deg,#6B21A8,#9333EA)",
-              display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,flexShrink:0}}>
+            <div style={{width:80,height:80,borderRadius:16,overflow:"hidden",background:"linear-gradient(140deg,#6B21A8,#9333EA)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,flexShrink:0}}>
               {logo?<img src={logo} style={{width:"100%",height:"100%",objectFit:"contain"}}/>:"✦"}
             </div>
             <div>
               <button className="btn btn-sm" style={{width:"auto"}} onClick={()=>logoRef.current?.click()}>📁 로고 업로드</button>
-              <p style={{fontSize:11,color:"rgba(160,140,220,.45)",marginTop:8}}>PNG · JPG · SVG 권장 · 정사각형 이미지 최적</p>
+              <p style={{fontSize:11,color:"rgba(160,140,220,.45)",marginTop:8}}>PNG · JPG · SVG 권장</p>
               <input ref={logoRef} type="file" accept="image/*" style={{display:"none"}} onChange={uploadLogo}/>
             </div>
           </div>
           <div className="div"/>
-          <h2 style={{marginBottom:8}}>학원 정보</h2>
-          <div style={{padding:"14px 18px",borderRadius:12,background:"rgba(255,255,255,.04)",
-            border:"1px solid rgba(167,139,250,.1)",fontSize:13,color:"rgba(195,185,255,.7)",lineHeight:2.2}}>
-            학원 ID · 브랜드: <strong style={{color:"#A78BFA"}}>{BRAND}</strong><br/>
-            생성되는 코드 형식: <strong style={{color:"#A78BFA",fontFamily:"'Gmarket Sans',sans-serif"}}>{BRAND}-XXXXXXXX</strong><br/>
-            관리자 비밀번호: <strong style={{color:"#A78BFA"}}>{APW}</strong><br/>
-          </div>
-          <div style={{marginTop:12,padding:"12px 16px",borderRadius:10,background:"rgba(245,158,11,.08)",
-            border:"1px solid rgba(245,158,11,.2)",fontSize:12,color:"rgba(253,211,77,.7)",lineHeight:1.8}}>
-            💡 다른 학원용 페이지를 원하시면 별도 문의해 주세요.<br/>
-            각 학원은 완전히 분리된 독립 페이지로 운영됩니다.
+          <div style={{padding:"14px 18px",borderRadius:12,background:"rgba(255,255,255,.04)",border:"1px solid rgba(167,139,250,.1)",fontSize:13,color:"rgba(195,185,255,.7)",lineHeight:2.2}}>
+            학원 브랜드: <strong style={{color:"#A78BFA"}}>{BRAND}</strong><br/>
+            코드 형식: <strong style={{color:"#A78BFA",fontFamily:"'Gmarket Sans',sans-serif"}}>{BRAND}-XXXXXXXX</strong>
           </div>
           </>
         )}
       </div></div>
     )}
 
-    {/* ADMIN DETAIL */}
     {view==="admin"&&adminAuth&&selSub&&(
       <ResultView sub={selSub} logo={logo}
         onBack={()=>setSelSub(null)}
@@ -1085,21 +1178,33 @@ function App(){
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  RESULT VIEW
+//  RESULT VIEW (풍성한 결과)
 // ═══════════════════════════════════════════════════════════════
-function ResultView({sub,logo,onBack,onPrint,isPublic,resultLink,copyLink}){
-  const s=sub;
-  const r1i=RM[s.r1],r2i=RM[s.r2],mi1i=MM[s.mi1],t1i=TM[s.tend1];
-  const radarR=s.riasec?.map(({key,score})=>({emoji:RM[key]?.emoji||"",label:RM[key]?.name||"",score}));
-  const radarMI=s.mi?.map(({key,score})=>({emoji:MM[key]?.emoji||"",label:(MM[key]?.name||"").replace("지능","").slice(0,4),score}));
+function ResultView({sub, logo, onBack, onPrint, isPublic, resultLink, copyLink}) {
+  const s = sub;
+  const r1i=RM[s.r1], r2i=RM[s.r2], mi1i=MM[s.mi1], mi2i=MM[s.mi2], t1i=TM[s.tend1];
+  const radarR = s.riasec?.map(({key,score})=>({emoji:RM[key]?.emoji||"",label:RM[key]?.name||"",score}));
+  const radarMI = s.mi?.map(({key,score})=>({emoji:MM[key]?.emoji||"",label:(MM[key]?.name||"").replace("지능","").slice(0,4),score}));
+
+  // MBTI 학습 스타일
+  const mbtiStudy = s.mbtiType ? [
+    s.mbtiType[0], s.mbtiType[1], s.mbtiType[2], s.mbtiType[3]
+  ].map(c => MBTI_STUDY[c]).filter(Boolean) : [];
+
   const LogoBox=()=>(
     <div className="logo-row" style={{marginBottom:0}}>
       <div className="logo-box">{logo?<img src={logo} alt="logo"/>:"✦"}</div>
-      <div><div className="logo-name"><span className="p">PIL</span><span className="t">TOP</span></div><div className="logo-tag">Career Compass</div></div>
+      <div>
+        <div className="logo-name"><span className="p">PIL</span><span className="t">TOP</span></div>
+        <div className="logo-tag">Career Compass</div>
+      </div>
     </div>
   );
-  return(
+
+  return (
     <div className="root top"><div className="card wide">
+
+      {/* 화면 버튼 (인쇄 시 숨김) */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}} className="no-print">
         <LogoBox/>
         <div style={{display:"flex",gap:8}}>
@@ -1109,30 +1214,40 @@ function ResultView({sub,logo,onBack,onPrint,isPublic,resultLink,copyLink}){
         </div>
       </div>
 
+      {/* 인쇄용 헤더 */}
+      <div className="print-header" style={{display:"none"}}>
+        <div className="print-header-logo">PIL<span style={{color:"#64748B"}}>TOP</span> Career Compass</div>
+        <div className="print-header-info">
+          진로적성 종합분석 보고서<br/>
+          검사일: {s.submittedAt}<br/>
+          {s.info?.school}
+        </div>
+      </div>
+
       {/* 학생 카드 */}
-      <div style={{display:"flex",gap:16,alignItems:"center",padding:"16px 20px",
+      <div className="student-card" style={{display:"flex",gap:16,alignItems:"center",padding:"16px 20px",
         background:"rgba(109,33,176,.08)",border:"1px solid rgba(167,139,250,.13)",borderRadius:16,marginBottom:24}}>
         <div style={{fontSize:44}}>👤</div>
         <div style={{flex:1}}>
-          <div style={{fontFamily:"'Gmarket Sans',sans-serif",fontSize:22,fontWeight:700,color:"#DDD6FE"}}>{s.info?.name}</div>
-          <div style={{fontSize:13,color:"rgba(170,150,220,.6)",marginTop:3,lineHeight:1.8}}>
+          <div className="student-name" style={{fontFamily:"'Gmarket Sans',sans-serif",fontSize:22,fontWeight:700,color:"#DDD6FE"}}>{s.info?.name}</div>
+          <div className="student-meta" style={{fontSize:13,color:"rgba(170,150,220,.6)",marginTop:3,lineHeight:1.8}}>
             {s.info?.grade}{s.info?.school?` · ${s.info.school}`:""}
-            {s.info?.studentPhone?<><br/>학생 {s.info.studentPhone}</>:""}
+            {s.info?.studentPhone?<><br/>📱 학생 {s.info.studentPhone}</>:""}
             {s.info?.parentPhone?<span style={{marginLeft:12}}>학부모 {s.info.parentPhone}</span>:""}
           </div>
           <div style={{fontSize:11,color:"rgba(140,120,180,.45)",marginTop:3}}>제출 {s.submittedAt}</div>
         </div>
         {s.mbtiType&&(
-          <div style={{textAlign:"center",padding:"10px 16px",background:"rgba(109,33,176,.15)",
+          <div className="mbti-box" style={{textAlign:"center",padding:"10px 16px",background:"rgba(109,33,176,.15)",
             border:"1px solid rgba(167,139,250,.2)",borderRadius:12,flexShrink:0}}>
-            <div style={{fontFamily:"'Gmarket Sans',sans-serif",fontSize:26,fontWeight:700,color:"#A78BFA"}}>{s.mbtiType}</div>
-            <div style={{fontSize:9.5,color:"rgba(160,140,220,.55)",marginTop:3}}>{MBTI_DESC[s.mbtiType]||""}</div>
+            <div className="mbti-type" style={{fontFamily:"'Gmarket Sans',sans-serif",fontSize:26,fontWeight:700,color:"#A78BFA"}}>{s.mbtiType}</div>
+            <div style={{fontSize:9.5,color:"rgba(160,140,220,.55)",marginTop:3,maxWidth:100}}>{MBTI_DESC[s.mbtiType]?.split("·")[0]||""}</div>
           </div>
         )}
       </div>
 
       {/* Hero */}
-      <div className="r-hero">
+      <div className="r-hero print-section">
         <div className="r-code">{s.r1}{s.r2}형</div>
         <div>
           <span className="pill">{r1i?.stream}</span>
@@ -1143,8 +1258,21 @@ function ResultView({sub,logo,onBack,onPrint,isPublic,resultLink,copyLink}){
         <div style={{marginTop:12,fontSize:13,color:"rgba(175,162,255,.65)",lineHeight:1.75}}>{r1i?.desc}</div>
       </div>
 
-      {/* Radars */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:20}}>
+      {/* 종합 분석 요약 */}
+      <div className="print-section" style={{marginBottom:20}}>
+        <div className="sec-t">📋 종합 분석 요약</div>
+        <div className="type-desc-box" style={{background:"rgba(109,33,176,.06)",borderLeft:"3px solid #7C3AED",borderRadius:"0 12px 12px 0",padding:"14px 18px"}}>
+          <p className="type-desc-text" style={{fontSize:13.5,lineHeight:1.95,color:"rgba(220,210,255,.85)"}}>
+            <strong style={{color:"#C4B5FD"}}>{s.info?.name}</strong>님은 <strong style={{color:"#C4B5FD"}}>{r1i?.name}({s.r1})</strong>과 <strong style={{color:"#C4B5FD"}}>{r2i?.name}({s.r2})</strong>의 복합 흥미 성향을 보입니다.
+            {" "}{r1i?.fullDesc}
+            {mi1i&&<>{" "}다중지능 중 <strong style={{color:"#C4B5FD"}}>{mi1i?.name}</strong>이 가장 두드러지며, {mi1i?.desc}에서 강점을 발휘합니다.</>}
+            {t1i&&<>{" "}계열 성향으로는 <strong style={{color:"#C4B5FD"}}>{t1i?.name}</strong>에 가장 강한 흥미를 보이고 있어 이 방향을 중심으로 진로를 탐색하는 것을 권장합니다.</>}
+          </p>
+        </div>
+      </div>
+
+      {/* 레이더 차트 */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:20}} className="print-section">
         {[{title:"RIASEC 흥미 유형",items:radarR},{title:"다중지능 프로파일",items:radarMI}].map(({title,items})=>(
           <div key={title} style={{background:"rgba(255,255,255,.025)",border:"1px solid rgba(167,139,250,.08)",borderRadius:14,padding:16,textAlign:"center"}}>
             <div className="sec-t" style={{marginBottom:10}}>{title}</div>
@@ -1153,25 +1281,83 @@ function ResultView({sub,logo,onBack,onPrint,isPublic,resultLink,copyLink}){
         ))}
       </div>
 
-      {/* Bars */}
-      {[
-        {title:"흥미 유형 (RIASEC)",data:s.riasec,map:RM},
-        {title:"다중지능",data:s.mi,map:MM},
-        {title:"계열 성향",data:s.tend,map:TM},
-      ].map(({title,data,map})=>(
-        <div key={title}>
-          <div className="sec-b">
-            <div className="sec-t">{title}</div>
-            {data?.map(({key,score},i)=>(
-              <Bar key={key} label={`${map[key]?.emoji} ${map[key]?.name}`} score={score} rank={i} color={map[key]?.color||"#7C3AED"}/>
+      {/* 흥미 유형 상세 */}
+      <div className="print-section">
+        <div className="sec-t">흥미 유형 (RIASEC)</div>
+        {s.riasec?.map(({key,score},i) => (
+          <Bar key={key} label={`${RM[key]?.emoji} ${RM[key]?.name}`} score={score} rank={i} color={RM[key]?.color||"#7C3AED"}/>
+        ))}
+      </div>
+
+      {/* 주요 유형 상세 설명 */}
+      <div className="print-section" style={{marginBottom:20}}>
+        {[{key:s.r1,rank:1},{key:s.r2,rank:2}].map(({key,rank})=>{
+          const info=RM[key];if(!info)return null;
+          return(
+            <div key={key} style={{marginBottom:12,padding:"14px 16px",background:"rgba(255,255,255,.025)",border:"1px solid rgba(167,139,250,.08)",borderRadius:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                <span style={{fontSize:20}}>{info.emoji}</span>
+                <span style={{fontFamily:"'Gmarket Sans',sans-serif",fontWeight:700,color:info.color,fontSize:14}}>{rank}순위 · {info.name}</span>
+                <span style={{fontSize:11,color:"rgba(160,140,220,.5)",padding:"2px 8px",borderRadius:6,background:"rgba(255,255,255,.05)"}}>{info.stream}</span>
+              </div>
+              <div style={{fontSize:12.5,color:"rgba(200,188,255,.7)",lineHeight:1.8,marginBottom:10}}>{info.fullDesc}</div>
+              <div>
+                <span style={{fontSize:10,color:"rgba(155,140,210,.5)",letterSpacing:2,marginRight:8}}>핵심강점</span>
+                {info.strength?.map(s=><span key={s} className="strength-tag">✓ {s}</span>)}
+              </div>
+              <div style={{marginTop:8,fontSize:11,color:"rgba(160,140,210,.5)"}}>
+                📚 학습 스타일: {info.study}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="div"/>
+
+      {/* 다중지능 */}
+      <div className="print-section">
+        <div className="sec-t">다중지능 (Gardner MI)</div>
+        {s.mi?.map(({key,score},i) => (
+          <Bar key={key} label={`${MM[key]?.emoji} ${MM[key]?.name}`} score={score} rank={i} color={MM[key]?.color||"#7C3AED"}/>
+        ))}
+        {mi1i&&<div style={{marginTop:10,padding:"10px 14px",background:"rgba(255,255,255,.025)",borderRadius:10,fontSize:12.5,color:"rgba(200,188,255,.7)",lineHeight:1.8}}>
+          💡 <strong style={{color:"#C4B5FD"}}>{mi1i.name}</strong>: {mi1i.desc}
+          {mi2i&&<><br/>🔹 <strong style={{color:"rgba(196,181,253,.7)"}}>{mi2i.name}</strong>: {mi2i.desc}</>}
+        </div>}
+      </div>
+      <div className="div"/>
+
+      {/* 계열 성향 */}
+      <div className="print-section">
+        <div className="sec-t">계열 성향</div>
+        {s.tend?.map(({key,score},i) => (
+          <Bar key={key} label={`${TM[key]?.emoji} ${TM[key]?.name}`} score={score} rank={i} color={TM[key]?.color||"#7C3AED"}/>
+        ))}
+      </div>
+      <div className="div"/>
+
+      {/* MBTI 학습 스타일 */}
+      {s.mbtiType&&mbtiStudy.length>0&&(
+        <>
+        <div className="print-section" style={{marginBottom:20}}>
+          <div className="sec-t">🧠 MBTI 기반 학습 스타일 ({s.mbtiType})</div>
+          <div style={{background:"rgba(99,102,241,.06)",border:"1px solid rgba(99,102,241,.15)",borderRadius:12,padding:"14px 16px"}}>
+            <div style={{fontFamily:"'Gmarket Sans',sans-serif",fontWeight:700,color:"#A5B4FC",fontSize:15,marginBottom:10}}>
+              {s.mbtiType} — {MBTI_DESC[s.mbtiType]}
+            </div>
+            {mbtiStudy.map((txt,i)=>(
+              <div key={i} style={{fontSize:12.5,color:"rgba(200,188,255,.75)",lineHeight:1.85,marginBottom:6,paddingLeft:14,borderLeft:"2px solid rgba(99,102,241,.3)"}}>
+                {txt}
+              </div>
             ))}
           </div>
-          <div className="div"/>
         </div>
-      ))}
+        <div className="div"/>
+        </>
+      )}
 
-      {/* Values */}
-      <div className="sec-b">
+      {/* 직업 가치관 */}
+      <div className="print-section sec-b">
         <div className="sec-t">직업 가치관 Top 3</div>
         <div className="tags">
           {s.valueTop?.map((v,i)=><span key={v} className={`tag ${i===0?"hi":""}`}>{["🥇","🥈","🥉"][i]} {v}</span>)}
@@ -1179,30 +1365,33 @@ function ResultView({sub,logo,onBack,onPrint,isPublic,resultLink,copyLink}){
       </div>
       <div className="div"/>
 
-      {/* Recommend */}
-      <div className="sec-b">
+      {/* 추천 학과·직업 */}
+      <div className="print-section sec-b">
         <div className="sec-t">🎯 추천 학과·전공</div>
         <div className="tags" style={{marginBottom:16}}>
-          {s.cross?.majors?.map((m,i)=><span key={m} className={`tag ${i<3?"hi":""}`}>{m}</span>)}
+          {s.cross?.majors?.map((m,i)=><span key={m} className={`tag ${i<3?"hi":""}`}>{i<3?"⭐ ":""}{m}</span>)}
         </div>
         <div className="sec-t">💼 추천 직업군</div>
         <div className="tags">
-          {s.cross?.jobs?.map(j=><span key={j} className="tag">{j}</span>)}
+          {s.cross?.jobs?.map(j=><span key={j} className="tag">✦ {j}</span>)}
         </div>
       </div>
       <div className="div"/>
 
-      {/* Counseling (admin only) */}
+      {/* 상담 포인트 (관리자 전용) */}
       {!isPublic&&(
         <>
-        <div className="sec-b">
+        <div className="print-section sec-b">
           <div className="sec-t">💬 상담 포인트 (선생님 전용)</div>
           <div className="adv">
-            <strong>RIASEC: {s.r1}{s.r2} · MI: {mi1i?.name} · 계열: {t1i?.name||"—"} · MBTI: {s.mbtiType||"—"}</strong>
+            <strong>핵심 프로파일: RIASEC {s.r1}{s.r2} · 주력지능 {mi1i?.name} · 계열 {t1i?.name||"—"} · MBTI {s.mbtiType||"—"}</strong>
             <br/><br/>
-            {s.cross?.pts?.map((p,i)=><div key={i} style={{marginBottom:5}}>📌 {p}</div>)}
+            {s.cross?.pts?.map((p,i)=><div key={i} style={{marginBottom:6,paddingLeft:8,borderLeft:"2px solid rgba(99,102,241,.4)"}}>📌 {p}</div>)}
             <br/>
-            <strong>추천 교내활동:</strong> {s.cross?.acts?.join(" · ")}
+            <strong>✦ 추천 교내활동:</strong><br/>
+            <div style={{marginTop:6,display:"flex",flexWrap:"wrap",gap:6}}>
+              {s.cross?.acts?.map(a=><span key={a} style={{padding:"3px 10px",borderRadius:6,background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.2)",fontSize:12,color:"#A5B4FC"}}>{a}</span>)}
+            </div>
           </div>
         </div>
         <div className="div"/>
@@ -1219,9 +1408,10 @@ function ResultView({sub,logo,onBack,onPrint,isPublic,resultLink,copyLink}){
     </div></div>
   );
 }
-  const container = document.getElementById("root");
-  const root = ReactDOM.createRoot(container);
-  root.render(React.createElement(App));
+
+const container = document.getElementById("root");
+const root = ReactDOM.createRoot(container);
+root.render(React.createElement(App));
   </script>
 </body>
 </html>
