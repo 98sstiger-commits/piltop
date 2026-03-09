@@ -466,8 +466,11 @@ h2{font-family:'Gmarket Sans',sans-serif;font-size:20px;font-weight:700;color:#E
   .print-header-logo{font-family:'Gmarket Sans',sans-serif;font-size:20px;font-weight:700;color:white!important;}
   .print-header-sub{font-size:10px;color:rgba(255,255,255,.7);letter-spacing:2px;margin-top:2px;}
   .print-header-info{font-size:10px;color:rgba(255,255,255,.85);text-align:right;line-height:1.9;}
-  h1,h2{color:#1a1529!important;-webkit-text-fill-color:#1a1529!important;}
-  p,span,div{color:#2d1b69!important;}
+  h1,h2,h3{color:#1a1529!important;-webkit-text-fill-color:#1a1529!important;}
+  p,span,div{color:#1a1529!important;-webkit-text-fill-color:#1a1529!important;}
+  .muted{color:#3b2c6e!important;-webkit-text-fill-color:#3b2c6e!important;}
+  strong{color:#1a1529!important;-webkit-text-fill-color:#1a1529!important;}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .r-hero{background:#F5F0FF!important;border-radius:10px!important;padding:16px!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .r-code{font-size:40px!important;-webkit-text-fill-color:#6D28D9!important;color:#6D28D9!important;}
   .sec-t{color:#7C3AED!important;border-bottom:1px solid #E9D5FF;padding-bottom:4px;}
@@ -519,6 +522,7 @@ function App(){
   const [secIdx,setSecIdx]=useState(0);
   const [qIdx,setQIdx]=useState(0);
   const [answers,setAnswers]=useState({});
+  const [pendingAns,setPendingAns]=useState(null);
   const [mbtiMode,setMbtiMode]=useState("none");
   const [mbtiKnown,setMbtiKnown]=useState("");
   const [animKey,setAnimKey]=useState(0);
@@ -638,7 +642,8 @@ function App(){
       setSecIdx(nextSec);setQIdx(0);
       autoSave(newAns,nextSec,0,info,mbtiMode,mbtiKnown);
     } else {
-      doSubmit(newAns);
+      setPendingAns(newAns);
+      setView("review");
     }
   }
 
@@ -679,6 +684,7 @@ function App(){
     await S.set(K.link(id),record);
     if(!token){const ll=await S.get(K.links())||[];if(!ll.includes(id))ll.unshift(id);await S.set(K.links(),ll);}
     await S.del(K.progress(id)); // 진행중 데이터 삭제
+    window.history.replaceState(null,'',window.location.pathname); // hash 제거 (뒤로가기 → 관리자 방지)
     setSelSub(submission);setView("done");
   }
 
@@ -931,6 +937,22 @@ function App(){
     </div></div>}
 
     {view==="quiz"&&<QuizView/>}
+
+    {view==="review"&&<div className="root"><div className="card fu">
+      <LogoRow/>
+      <div style={{textAlign:"center",marginBottom:24}}>
+        <div style={{fontSize:52,marginBottom:12}}>📝</div>
+        <h2>검사 완료!</h2>
+        <p className="muted" style={{lineHeight:1.9}}>모든 문항에 답하셨습니다.<br/>아래 버튼을 눌러 최종 제출해 주세요.</p>
+      </div>
+      <div style={{padding:"14px 16px",borderRadius:12,background:"rgba(139,92,246,.08)",border:"1px solid rgba(139,92,246,.2)",fontSize:13,color:"rgba(196,181,253,.85)",textAlign:"center",lineHeight:1.9,marginBottom:24}}>
+        ✏️ 수정이 필요하면 <strong style={{color:"#C4B5FD"}}>← 돌아가기</strong>를 눌러 다시 답변할 수 있어요.
+      </div>
+      <div className="btn-row">
+        <button className="btn btn-g" onClick={()=>setView("quiz")}>← 돌아가기</button>
+        <button className="btn" onClick={()=>{if(pendingAns)doSubmit(pendingAns);}}>최종 제출 →</button>
+      </div>
+    </div></div>}
 
     {view==="done"&&selSub&&<div className="root"><div className="card fu">
       <LogoRow/>
