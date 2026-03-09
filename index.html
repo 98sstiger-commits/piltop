@@ -537,7 +537,7 @@ function App(){
   const activeSecs=mbtiMode==="test"?SECS:SECS.filter(s=>s.key!=="mbti");
 
   const showToast=msg=>{setToast(msg);clearTimeout(toastRef.current);toastRef.current=setTimeout(()=>setToast(""),2600);};
-  const resultUrl=t=>`${window.location.origin}${window.location.pathname}#r/${encodeURIComponent(t)}`;
+  const resultUrl=t=>`${window.location.origin}${window.location.pathname}?r=${encodeURIComponent(t)}`;
   const copyLink=async url=>{try{await navigator.clipboard.writeText(url);showToast("✅ 링크 복사됨!");}catch{showToast("링크: "+url);}};
   const adminLogin=()=>{if(adminPw===APW){setAdminAuth(true);loadAdmin();}else{setAdminErr(true);}};
 
@@ -551,9 +551,20 @@ function App(){
     (async()=>{
       const cfg=await S.get(K.cfg());
       if(cfg?.logo)setLogo(cfg.logo);
+      // ?t= 쿼리파라미터 우선, 없으면 hash 사용 (카카오톡 호환)
+      const params=new URLSearchParams(window.location.search);
+      const qToken=params.get("t");
+      const qResult=params.get("r");
       const hash=window.location.hash.slice(1);
-      if(!hash){setView("home");return;}
-      if(hash==="admin"){setView("admin");return;}
+
+      // 결과 링크: ?r=TOKEN 또는 #r/TOKEN
+      if(qResult){
+        const t=decodeURIComponent(qResult);
+        const d=await S.get(K.link(t));
+        if(d?.submission){setSelSub(d.submission);setView("result_pub");}
+        else setView("result_notfound");
+        return;
+      }
       if(hash.startsWith("r/")){
         const t=decodeURIComponent(hash.slice(2));
         const d=await S.get(K.link(t));
@@ -561,7 +572,11 @@ function App(){
         else setView("result_notfound");
         return;
       }
-      const t=decodeURIComponent(hash);
+      // 관리자
+      if(hash==="admin"||qToken==="admin"){setView("admin");return;}
+      // 학생 토큰: ?t=TOKEN 또는 #TOKEN
+      const t=qToken?decodeURIComponent(qToken):(hash?decodeURIComponent(hash):"");
+      if(!t){setView("home");return;}
       const d=await S.get(K.link(t));
       if(!d){setView("link_invalid");return;}
       setToken(t);setTokenData(d);
@@ -876,15 +891,15 @@ function App(){
         <h2>검사 완료!</h2>
         <p className="muted">{selSub.info?.name}님의 진로 분석이 완성되었습니다.</p>
       </div>
-      <button className="btn" onClick={()=>{setView("result_pub");window.location.hash=`r/${encodeURIComponent(selSub.token)}`;}}>📊 결과 보기</button>
-      <button className="btn btn-g" style={{marginTop:10}} onClick={()=>copyLink(`${window.location.origin}${window.location.pathname}#r/${encodeURIComponent(selSub.token)}`)}>🔗 결과 링크 복사</button>
+      <button className="btn" onClick={()=>{setView("result_pub");window.history.replaceState(null,'',`?r=${encodeURIComponent(selSub.token)}`);}}>📊 결과 보기</button>
+      <button className="btn btn-g" style={{marginTop:10}} onClick={()=>copyLink(`${window.location.origin}${window.location.pathname}?r=${encodeURIComponent(selSub.token)}`)}>🔗 결과 링크 복사</button>
     </div></div>}
 
     {view==="result_pub"&&selSub&&(
       <ResultView sub={selSub} logo={logo} isPublic
         onBack={()=>{setSelSub(null);setView("home");window.location.hash="";}}
         onPrint={()=>window.print()}
-        resultLink={`${window.location.origin}${window.location.pathname}#r/${encodeURIComponent(selSub.token)}`}
+        resultLink={`${window.location.origin}${window.location.pathname}?r=${encodeURIComponent(selSub.token)}`}
         copyLink={copyLink}/>
     )}
 
@@ -944,7 +959,7 @@ function App(){
               <div style={{fontWeight:600,color:"#E2D9FE",fontSize:14}}>{d.label}</div>
               <div style={{fontSize:10,color:"rgba(167,139,250,.4)",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{resultUrl(d.token).replace("#r/","#")}</div>
             </div>
-            <button className="btn btn-g btn-sm" style={{flexShrink:0,marginRight:4}} onClick={()=>copyLink(`${window.location.origin}${window.location.pathname}#${encodeURIComponent(d.token)}`)}>복사</button>
+            <button className="btn btn-g btn-sm" style={{flexShrink:0,marginRight:4}} onClick={()=>copyLink(`${window.location.origin}${window.location.pathname}?t=${encodeURIComponent(d.token)}`)}>복사</button>
             <button className="btn btn-sm" style={{flexShrink:0,background:"rgba(239,68,68,.2)",boxShadow:"none",border:"1px solid rgba(239,68,68,.3)",color:"#FCA5A5"}} onClick={()=>deleteToken(d.token)}>삭제</button>
           </div>
         ))}
