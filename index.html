@@ -836,7 +836,7 @@ function App(){
         <div style={{fontSize:52,marginBottom:14}}>🔒</div>
         <h2>이미 제출된 검사입니다</h2>
         <p className="muted">이 코드로 이미 검사가 완료되었습니다.<br/>선생님께 문의해 주세요.</p>
-        <button className="btn btn-g btn-sm" style={{margin:"0 auto"}} onClick={()=>{setView("home");window.location.hash="";}}>← 처음으로</button>
+        <button className="btn btn-g btn-sm" style={{margin:"0 auto"}} onClick={()=>{setView("home");window.history.replaceState(null,"",window.location.pathname);}}>← 처음으로</button>
       </div>
     </div></div>}
 
@@ -852,7 +852,7 @@ function App(){
       <div style={{fontSize:52,marginBottom:16}}>🔍</div>
       <h2>결과를 찾을 수 없습니다</h2>
       <p className="muted">링크가 만료되었거나 잘못된 링크입니다.<br/>선생님께 다시 요청해 주세요.</p>
-      <button className="btn btn-g btn-sm" style={{margin:"0 auto"}} onClick={()=>{setView("home");window.location.hash="";}}>← 홈으로</button>
+      <button className="btn btn-g btn-sm" style={{margin:"0 auto"}} onClick={()=>{setView("home");window.history.replaceState(null,"",window.location.pathname);}}>← 홈으로</button>
     </div></div>}
 
     {view==="info"&&<div className="root"><div className="card fu">
@@ -992,7 +992,7 @@ function App(){
         {adminErr&&<div style={{color:"#EF4444",fontSize:12,marginTop:6}}>비밀번호가 올바르지 않습니다.</div>}
       </div>
       <div className="btn-row" style={{marginTop:8}}>
-        <button className="btn btn-g" onClick={()=>{setView("home");window.location.hash="";}}>← 이전</button>
+        <button className="btn btn-g" onClick={()=>{setView("home");window.history.replaceState(null,"",window.location.pathname);}}>← 이전</button>
         <button className="btn" onClick={adminLogin}>로그인</button>
       </div>
     </div></div>}
@@ -1003,7 +1003,7 @@ function App(){
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           {sbReady&&<span style={{fontSize:11,color:"#34D399",display:"flex",alignItems:"center",gap:4}}>🟢 Supabase 연결됨</span>}
           <button className="btn btn-g btn-sm" onClick={loadAdmin}>🔄</button>
-          <button className="btn btn-g btn-sm" onClick={()=>{setAdminAuth(false);setAdminPw("");window.location.hash="";}}>로그아웃</button>
+          <button className="btn btn-g btn-sm" onClick={()=>{setAdminAuth(false);setAdminPw("");window.history.replaceState(null,"",window.location.pathname);}}>로그아웃</button>
         </div>
       </div>
       <div className="tabs no-print">
