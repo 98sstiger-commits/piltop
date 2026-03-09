@@ -22,7 +22,6 @@ const APW   = "piltop";
 const BRAND = "PILTOP";
 const SUPABASE_URL = "YOUR_SUPABASE_URL";
 const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY";
-const CLAUDE_API_KEY = "YOUR_CLAUDE_API_KEY"; // ← Claude API 키 입력
 
 // ═══════════════════════════════
 //  STORAGE
@@ -278,42 +277,6 @@ function analyze(answers, mbtiMode, mbtiKnown) {
     cross:{majors:[...majorSet].slice(0,10),jobs:[...jobSet].slice(0,8),pts,acts}};
 }
 
-// ═══════════════════════════════
-//  AI 코멘트 생성 (Claude API)
-// ═══════════════════════════════
-async function generateAIComment(sub) {
-  const apiReady = CLAUDE_API_KEY !== "YOUR_CLAUDE_API_KEY";
-  if (!apiReady) return null;
-  const s = sub;
-  const prompt = `당신은 한국의 진로진학 상담 전문가입니다.
-다음은 고등학생의 진로검사 결과입니다. 이 학생에게 따뜻하고 구체적인 진로 코멘트를 한국어로 작성해주세요.
-
-이름: ${s.info?.name}
-학년: ${s.info?.grade}
-RIASEC 1순위: ${s.r1}형(${s.riasec?.[0]?.score})  2순위: ${s.r2}형(${s.riasec?.[1]?.score})
-주력 다중지능: ${s.mi1}(${s.mi?.[0]?.score})  2순위: ${s.mi2}(${s.mi?.[1]?.score})
-계열 성향 1순위: ${s.tend1}  2순위: ${s.tend2||""}
-직업가치관 Top3: ${s.valueTop?.join(", ")}
-MBTI: ${s.mbtiType||"미검사"}
-
-다음 형식으로 작성:
-1. 이 학생의 핵심 강점 패턴 (2~3문장)
-2. 가장 잘 맞는 진로 방향 (구체적 전공/직업 언급, 2~3문장)
-3. 고등학교 생활 전략 조언 (생기부 활동 포함, 2~3문장)
-4. 격려 메시지 (1~2문장)
-
-전체 300~400자 이내로, 딱딱하지 않고 학생에게 직접 말하는 따뜻한 톤으로 작성하세요.`;
-
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method:"POST",
-      headers:{"Content-Type":"application/json","x-api-key":CLAUDE_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-      body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:600,messages:[{role:"user",content:prompt}]})
-    });
-    const data = await res.json();
-    return data.content?.[0]?.text || null;
-  } catch(e) { return null; }
-}
 
 // ═══════════════════════════════
 //  CHARTS
@@ -478,11 +441,6 @@ h2{font-family:'Gmarket Sans',sans-serif;font-size:20px;font-weight:700;color:#E
 .hint{font-size:10px;color:rgba(148,128,200,.4);line-height:1.7;text-align:center;margin-top:12px;}
 /* 자동저장 배너 */
 .autosave-banner{padding:10px 16px;border-radius:12px;background:rgba(234,179,8,.07);border:1px solid rgba(234,179,8,.2);font-size:12px;color:rgba(253,211,77,.8);text-align:center;margin-bottom:16px;}
-/* AI 코멘트 */
-.ai-box{background:linear-gradient(135deg,rgba(16,185,129,.06),rgba(91,33,182,.06));border:1px solid rgba(52,211,153,.2);border-radius:16px;padding:18px 20px;}
-.ai-loading{display:flex;align-items:center;gap:10px;color:rgba(110,231,183,.7);font-size:13px;}
-.ai-dot{width:8px;height:8px;border-radius:50%;background:#6EE7B7;animation:pulse 1s infinite;}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
 /* 총평박스 */
 .summary-box{background:rgba(52,211,153,.05);border:1px solid rgba(52,211,153,.18);border-radius:16px;padding:18px 20px;}
 /* PDF */
@@ -510,7 +468,7 @@ h2{font-family:'Gmarket Sans',sans-serif;font-size:20px;font-weight:700;color:#E
   .student-card{background:#F5F0FF!important;border:2px solid #7C3AED!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .type-desc-box{background:#FAF5FF!important;border-left:4px solid #7C3AED!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .type-desc-text{color:#2d1b69!important;}
-  .ai-box{background:#F0FDF9!important;border:2px solid #6EE7B7!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+
   .summary-box{background:#F0FDF4!important;border:2px solid #6EE7B7!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .logo-name .p{color:#7C3AED!important;-webkit-text-fill-color:#7C3AED!important;}
   .logo-name .t{color:#64748B!important;-webkit-text-fill-color:#64748B!important;}
@@ -1025,14 +983,7 @@ function ResultView({sub,logo,onBack,onPrint,isPublic,resultLink,copyLink}){
   const radarMI=s.mi?.map(({key,score})=>({emoji:MM[key]?.emoji||"",label:(MM[key]?.name||"").replace("지능","").slice(0,4),score}));
   const mbtiStudy=s.mbtiType?[s.mbtiType[0],s.mbtiType[1],s.mbtiType[2],s.mbtiType[3]].map(c=>MBTI_STUDY[c]).filter(Boolean):[];
 
-  const [aiComment,setAiComment]=useState(null);
-  const [aiLoading,setAiLoading]=useState(false);
 
-  useEffect(()=>{
-    if(CLAUDE_API_KEY==="YOUR_CLAUDE_API_KEY")return;
-    setAiLoading(true);
-    generateAIComment(s).then(txt=>{setAiComment(txt);setAiLoading(false);});
-  },[]);
 
   const LogoBox=()=>(
     <div className="logo-row" style={{marginBottom:0}}>
@@ -1235,17 +1186,6 @@ function ResultView({sub,logo,onBack,onPrint,isPublic,resultLink,copyLink}){
         <div className="div"/>
       </>}
 
-      {/* AI 맞춤 코멘트 */}
-      <div className="print-section sec-b">
-        <div className="sec-t">✨ AI 맞춤 진로 코멘트</div>
-        <div className="ai-box">
-          {aiLoading&&<div className="ai-loading"><div className="ai-dot"/><span>AI가 맞춤 진로 코멘트를 작성 중입니다...</span></div>}
-          {!aiLoading&&aiComment&&<p style={{fontSize:13.5,lineHeight:2,color:"rgba(220,252,231,.88)",whiteSpace:"pre-wrap"}}>{aiComment}</p>}
-          {!aiLoading&&!aiComment&&CLAUDE_API_KEY==="YOUR_CLAUDE_API_KEY"&&<p style={{fontSize:12.5,color:"rgba(110,231,183,.5)",lineHeight:1.8}}>AI 코멘트 기능을 사용하려면 CLAUDE_API_KEY를 설정해주세요.</p>}
-          {!aiLoading&&!aiComment&&CLAUDE_API_KEY!=="YOUR_CLAUDE_API_KEY"&&<p style={{fontSize:12.5,color:"rgba(110,231,183,.5)"}}>코멘트 생성에 실패했습니다.</p>}
-        </div>
-      </div>
-      <div className="div"/>
 
       {/* 총평 */}
       <div className="print-section sec-b summary-box">
