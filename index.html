@@ -34,7 +34,6 @@ const APW   = "piltop";
 const BRAND = "PILTOP";
 const SUPABASE_URL = "https://zmtldohklivkzpfdyflc.supabase.co"
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptdGxkb2hrbGl2a3pwZmR5ZmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5NjgxMDQsImV4cCI6MjA4ODU0NDEwNH0.cv1WrvDzNedVZABWyRCS9ARRxf4Si9qgeUqEvhpHWlo"
-
 // ═══════════════════════════════
 //  STORAGE
 // ═══════════════════════════════
@@ -877,10 +876,32 @@ function App(){
         </div>}
       <button className="btn"
         disabled={!info.name||!info.grade||(!!tokenData?.label&&info.name.trim()!==tokenData.label.trim())}
-        onClick={()=>{setMbtiMode("test");setView("quiz");autoSave({},0,0,info,"test","");}}>다음 →</button>
+        onClick={()=>{setView("mbti_select");}}>다음 →</button>
     </div></div>}
 
 
+
+    {view==="mbti_select"&&<div className="root"><div className="card fu">
+      <LogoRow/>
+      <h2>MBTI 입력 방식 선택</h2>
+      <p className="muted">MBTI를 알고 있으면 입력하고, 모르면 검사하거나 건너뛸 수 있어요.</p>
+      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
+        {[{v:"test",icon:"🧩",t:"MBTI 검사하기 (12문항)",sub:"모르거나 확인하고 싶어요"},{v:"input",icon:"✏️",t:"MBTI 직접 입력",sub:"이미 알고 있어요"},{v:"none",icon:"⏭",t:"건너뛰기",sub:"지금은 패스할게요"}].map(o=>(
+          <button key={o.v} className={`ab-opt${mbtiMode===o.v?" a":""}`} onClick={()=>setMbtiMode(o.v)}>
+            <div className="ab-label">{o.icon}</div>
+            <div className="ab-text">{o.t}</div>
+            <div style={{fontSize:11.5,color:"rgba(167,139,250,.5)",marginTop:3}}>{o.sub}</div>
+          </button>
+        ))}
+      </div>
+      {mbtiMode==="input"&&<div className="inp-g"><div className="inp-l">MBTI 유형</div>
+        <input className="inp" placeholder="ENFP" maxLength={4} value={mbtiKnown} onChange={e=>setMbtiKnown(e.target.value.toUpperCase())}/>
+      </div>}
+      <div className="btn-row">
+        <button className="btn btn-g" onClick={()=>setView("info")}>← 이전</button>
+        <button className="btn" disabled={mbtiMode==="input"&&mbtiKnown.length!==4} onClick={()=>{setView("quiz");autoSave({},0,0,info,mbtiMode,mbtiKnown);}}>검사 시작 →</button>
+      </div>
+    </div></div>}
 
     {view==="quiz"&&<QuizView/>}
 
@@ -936,13 +957,15 @@ function App(){
       {adminTab==="subs"&&!loadingAdmin&&(<>
         {subs.length===0&&<p className="muted" style={{textAlign:"center",padding:"32px 0"}}>아직 제출된 검사가 없습니다.</p>}
         {subs.map(d=>(
-          <div key={d.token} className="srow-in" style={{cursor:"pointer",borderRadius:10,marginBottom:2}} onClick={()=>setSelSub(d.submission)}>
+          <div key={d.token} className="srow-in" style={{borderRadius:10,marginBottom:2}}>
             <div className={`status-dot status-done`}/>
-            <div style={{flex:1,minWidth:0}}>
+            <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={()=>setSelSub(d.submission)}>
               <div style={{fontWeight:600,color:"#E2D9FE",fontSize:14}}>{d.label}</div>
               <div style={{fontSize:11,color:"rgba(167,139,250,.45)",marginTop:2}}>{d.submission?.submittedAt} · {d.submission?.info?.grade}</div>
             </div>
-            <span style={{fontSize:11,color:"rgba(167,139,250,.5)"}}>→ 보기</span>
+            <button className="btn btn-g btn-sm" style={{flexShrink:0,marginRight:4}} onClick={()=>copyLink(resultUrl(d.token))}>🔗</button>
+            <button className="btn btn-sm" style={{flexShrink:0,background:"rgba(239,68,68,.2)",boxShadow:"none",border:"1px solid rgba(239,68,68,.3)",color:"#FCA5A5"}}
+              onClick={async()=>{if(!window.confirm(`${d.label} 결과를 삭제할까요?`))return;await S.del(K.link(d.token));const ll=await S.get(K.links())||[];await S.set(K.links(),ll.filter(x=>x!==d.token));setSubs(prev=>prev.filter(x=>x.token!==d.token));}}>삭제</button>
           </div>
         ))}
       </>)}
