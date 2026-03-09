@@ -9,142 +9,101 @@
   <script src="https://unpkg.com/@babel/standalone@7.23.3/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body style="margin:0;padding:0;background:#060412;">
-  <div id="root"></div>
-  <script type="text/babel">
-const { useState, useEffect, useRef } = React;
+<body style="margin:0;padding:0;background:#08071A;">
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef,useCallback}=React;
 
-// ═══════════════════════════════════════════════════════════════
-//  ACADEMY CONFIG
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════
+//  CONFIG
+// ═══════════════════════════════
 const AID   = "PILTOP";
 const APW   = "piltop";
 const BRAND = "PILTOP";
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY";
+const CLAUDE_API_KEY = "YOUR_CLAUDE_API_KEY"; // ← Claude API 키 입력
 
-// ═══════════════════════════════════════════════════════════════
-//  SUPABASE CONFIG  ← 여기에 본인 정보 입력!
-// ═══════════════════════════════════════════════════════════════
-const SUPABASE_URL = "https://zmtldohklivkzpfdyflc.supabase.co";      // 예: https://abcdef.supabase.co
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptdGxkb2hrbGl2a3pwZmR5ZmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5NjgxMDQsImV4cCI6MjA4ODU0NDEwNH0.cv1WrvDzNedVZABWyRCS9ARRxf4Si9qgeUqEvhpHWlo"; // 예: eyJhbGci...
-
-// ═══════════════════════════════════════════════════════════════
-//  STORAGE (Supabase + localStorage 이중백업)
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════
+//  STORAGE
+// ═══════════════════════════════
 const sbReady = SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_KEY !== "YOUR_SUPABASE_ANON_KEY";
 const sb = sbReady ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
-
 const S = {
   async get(k) {
-    if (sbReady) {
-      try {
-        const { data } = await sb.from('piltop_data').select('value').eq('key', k).maybeSingle();
-        if (data) return data.value;
-      } catch(e) {}
-    }
-    try { const v = localStorage.getItem(k); if (v) return JSON.parse(v); } catch {}
+    if (sbReady) { try { const {data}=await sb.from('piltop_data').select('value').eq('key',k).maybeSingle(); if(data)return data.value; } catch(e){} }
+    try { const v=localStorage.getItem(k); if(v)return JSON.parse(v); } catch{}
     return null;
   },
-  async set(k, v) {
-    if (sbReady) {
-      try { await sb.from('piltop_data').upsert({ key: k, value: v, updated_at: new Date().toISOString() }); } catch(e) {}
-    }
-    try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+  async set(k,v) {
+    if (sbReady) { try { await sb.from('piltop_data').upsert({key:k,value:v,updated_at:new Date().toISOString()}); } catch(e){} }
+    try { localStorage.setItem(k,JSON.stringify(v)); } catch{}
   },
   async del(k) {
-    if (sbReady) {
-      try { await sb.from('piltop_data').delete().eq('key', k); } catch(e) {}
-    }
-    try { localStorage.removeItem(k); } catch {}
-  },
-  async list(pre) {
-    if (sbReady) {
-      try {
-        const { data } = await sb.from('piltop_data').select('key').like('key', `${pre}%`);
-        if (data && data.length > 0) return data.map(d => d.key);
-      } catch(e) {}
-    }
-    const keys = [];
-    try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k?.startsWith(pre)) keys.push(k); } } catch {}
-    return keys;
+    if (sbReady) { try { await sb.from('piltop_data').delete().eq('key',k); } catch(e){} }
+    try { localStorage.removeItem(k); } catch{}
   }
 };
-const K = { link: t => `${AID}:L:${t}`, links: () => `${AID}:LINKS`, cfg: () => `${AID}:CFG` };
-
-const mkCode = () => {
-  const c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  return `${BRAND}-` + Array.from({length:8}, () => c[Math.floor(Math.random()*c.length)]).join("");
+const K = {
+  link: t => `${AID}:L:${t}`,
+  links: () => `${AID}:LINKS`,
+  cfg: () => `${AID}:CFG`,
+  progress: t => `${AID}:P:${t}`,  // 자동저장 키
 };
+const mkCode = () => { const c="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; return `${BRAND}-`+Array.from({length:8},()=>c[Math.floor(Math.random()*c.length)]).join(""); };
 
-// ═══════════════════════════════════════════════════════════════
-//  QUESTIONS
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════
+//  QUESTIONS  (총 60문항: RIASEC 18, MI 24, 계열 12, 가치관 6 / + MBTI 12 선택)
+// ═══════════════════════════════
 const RQ=[
   {id:"R1",d:"R",t:"기계나 전자 기기를 분해하거나 조립하는 것이 재미있다."},
   {id:"R2",d:"R",t:"손으로 직접 무언가를 만들거나 고치는 것을 좋아한다."},
-  {id:"R3",d:"R",t:"야외 활동이나 체육 활동에 적극적으로 참여하는 편이다."},
-  {id:"R4",d:"R",t:"컴퓨터 하드웨어나 네트워크 구조에 흥미가 있다."},
-  {id:"R5",d:"R",t:"직접 몸으로 체험하고 실습하는 방식으로 배울 때 더 잘 이해된다."},
+  {id:"R3",d:"R",t:"체육이나 야외 활동에서 신체를 쓰는 것이 즐겁다."},
   {id:"I1",d:"I",t:"수학 문제를 풀거나 과학 원리를 탐구하는 것이 좋다."},
   {id:"I2",d:"I",t:"'왜 그럴까?'라는 질문을 자주 하고 깊이 파고드는 편이다."},
-  {id:"I3",d:"I",t:"실험이나 조사를 통해 결론을 이끌어내는 과정이 즐겁다."},
-  {id:"I4",d:"I",t:"데이터나 통계를 분석하는 것이 흥미롭다."},
-  {id:"I5",d:"I",t:"복잡한 문제를 논리적으로 분석하고 해결하는 것이 좋다."},
-  {id:"A1",d:"A",t:"그림 그리기, 사진 찍기, 영상 편집 등을 즐긴다."},
-  {id:"A2",d:"A",t:"음악 감상이나 악기 연주가 나에게 의미 있는 활동이다."},
-  {id:"A3",d:"A",t:"글쓰기(시·소설·에세이 등)를 통해 표현하는 것이 좋다."},
-  {id:"A4",d:"A",t:"독창적인 아이디어를 시각적으로 표현하고 싶다."},
-  {id:"A5",d:"A",t:"틀에 박힌 방식보다 나만의 방법으로 문제를 해결하는 것이 좋다."},
+  {id:"I3",d:"I",t:"복잡한 문제를 논리적으로 분석하고 해결하는 것이 좋다."},
+  {id:"A1",d:"A",t:"그림·사진·영상 편집 등 시각적 창작 활동을 즐긴다."},
+  {id:"A2",d:"A",t:"글쓰기나 음악을 통해 내 감정을 표현하는 것이 좋다."},
+  {id:"A3",d:"A",t:"틀에 박힌 방식보다 나만의 방법으로 문제를 해결하는 것이 좋다."},
   {id:"S1",d:"S",t:"친구나 가족의 고민을 들어주고 도움을 주는 것이 보람 있다."},
-  {id:"S2",d:"S",t:"팀 프로젝트에서 조율하고 협력하는 역할이 잘 맞는다."},
-  {id:"S3",d:"S",t:"사람들을 가르치거나 안내하는 활동에 흥미를 느낀다."},
-  {id:"S4",d:"S",t:"사회 문제에 관심이 많고, 도움이 필요한 사람을 돕고 싶다."},
-  {id:"S5",d:"S",t:"다양한 사람들과 어울리고 소통하는 것이 즐겁다."},
+  {id:"S2",d:"S",t:"사람들을 가르치거나 안내하는 활동에 흥미를 느낀다."},
+  {id:"S3",d:"S",t:"다양한 사람들과 어울리고 소통하는 것이 즐겁다."},
   {id:"E1",d:"E",t:"무리를 이끌거나 의견을 조율하는 리더 역할이 좋다."},
-  {id:"E2",d:"E",t:"새로운 아이디어로 사업이나 프로젝트를 시작하고 싶다."},
-  {id:"E3",d:"E",t:"설득하거나 협상하는 상황에서 자신감이 있다."},
-  {id:"E4",d:"E",t:"경쟁적인 환경에서 목표를 달성하는 것이 동기부여가 된다."},
-  {id:"E5",d:"E",t:"높은 목표를 세우고 이를 달성하기 위해 적극적으로 행동한다."},
+  {id:"E2",d:"E",t:"설득하거나 협상하는 상황에서 자신감이 있다."},
+  {id:"E3",d:"E",t:"높은 목표를 세우고 이를 달성하기 위해 적극적으로 행동한다."},
   {id:"C1",d:"C",t:"체계적으로 정리하고 계획하는 것이 편안하다."},
-  {id:"C2",d:"C",t:"규칙이나 절차를 따르는 것이 안정적으로 느껴진다."},
-  {id:"C3",d:"C",t:"숫자나 표를 다루고 정확하게 계산하는 것이 잘 맞는다."},
-  {id:"C4",d:"C",t:"문서 작성이나 데이터 관리 업무가 나에게 맞을 것 같다."},
-  {id:"C5",d:"C",t:"정해진 순서와 방법에 따라 일을 처리하는 것이 편하다."},
+  {id:"C2",d:"C",t:"숫자나 표를 다루고 정확하게 계산하는 것이 잘 맞는다."},
+  {id:"C3",d:"C",t:"정해진 순서와 방법에 따라 꼼꼼하게 일을 처리하는 것이 편하다."},
 ];
 const MQ=[
   {id:"L1",d:"LI",t:"책 읽기, 글쓰기, 말하기를 즐기고 잘한다는 이야기를 자주 듣는다."},
   {id:"L2",d:"LI",t:"단어나 언어 표현에 민감하고, 내 생각을 글이나 말로 잘 전달한다."},
-  {id:"L3",d:"LI",t:"국어나 외국어 과목이 다른 과목보다 재미있다."},
-  {id:"L4",d:"LI",t:"이야기를 만들거나 조리 있게 설명하는 것을 좋아한다."},
+  {id:"L3",d:"LI",t:"이야기를 만들거나 조리 있게 설명하는 것을 좋아한다."},
   {id:"M1",d:"LM",t:"수학 문제를 단계적으로 풀어가는 과정이 즐겁다."},
   {id:"M2",d:"LM",t:"패턴이나 규칙을 빠르게 찾아내는 편이다."},
-  {id:"M3",d:"LM",t:"컴퓨터 프로그래밍이나 논리 퍼즐에 흥미를 느낀다."},
-  {id:"M4",d:"LM",t:"원인과 결과를 따지며 논리적으로 생각하는 것이 자연스럽다."},
+  {id:"M3",d:"LM",t:"원인과 결과를 따지며 논리적으로 생각하는 것이 자연스럽다."},
   {id:"SP1",d:"SP",t:"지도·도면·그래프를 보면 머릿속에서 이미지로 쉽게 그려진다."},
   {id:"SP2",d:"SP",t:"그림 그리기, 사진·영상 구도 잡기 등 시각적 표현을 잘한다."},
-  {id:"SP3",d:"SP",t:"길을 잘 찾고, 공간·방향 감각이 좋은 편이다."},
-  {id:"SP4",d:"SP",t:"건축물·디자인·색배합 등에 자연스럽게 눈이 간다."},
+  {id:"SP3",d:"SP",t:"건축물·디자인·색배합 등에 자연스럽게 눈이 간다."},
   {id:"MU1",d:"MU",t:"노래나 악기를 배우는 것이 자연스럽고 즐겁다."},
-  {id:"MU2",d:"MU",t:"리듬·멜로디를 빠르게 외우고 따라 부르는 편이다."},
+  {id:"MU2",d:"MU",t:"리듬·멜로디를 빠르게 외우고 음악에 민감하게 반응한다."},
   {id:"MU3",d:"MU",t:"음악을 들으면 감정이나 이미지가 선명하게 떠오른다."},
   {id:"B1",d:"BK",t:"몸으로 직접 체험하거나 움직이면서 배울 때 더 잘 이해된다."},
   {id:"B2",d:"BK",t:"스포츠·댄스·연기 등 신체를 쓰는 활동에 자신 있다."},
   {id:"B3",d:"BK",t:"손재주가 좋고, 무언가를 만들거나 조립하는 것이 즐겁다."},
   {id:"IP1",d:"IP",t:"새로운 사람을 만나는 것이 즐겁고 금방 친해진다."},
   {id:"IP2",d:"IP",t:"친구들이 고민이 생기면 나에게 먼저 이야기하는 편이다."},
-  {id:"IP3",d:"IP",t:"모둠 활동이나 협업 프로젝트가 혼자 하는 것보다 더 좋다."},
-  {id:"IP4",d:"IP",t:"상대방의 감정과 기분을 잘 파악하는 편이다."},
+  {id:"IP3",d:"IP",t:"상대방의 감정과 기분을 잘 파악하는 편이다."},
   {id:"IA1",d:"IA",t:"내 감정과 생각을 잘 파악하고 스스로 돌아보는 시간을 즐긴다."},
   {id:"IA2",d:"IA",t:"내가 무엇을 잘하고 무엇을 못 하는지 비교적 잘 안다."},
   {id:"IA3",d:"IA",t:"혼자만의 시간이 필요하고, 개인 목표를 스스로 세우는 편이다."},
   {id:"NA1",d:"NA",t:"동물·식물·자연현상을 관찰하고 분류하는 것이 흥미롭다."},
   {id:"NA2",d:"NA",t:"환경·생태 문제에 관심이 많고, 자연 속 탐험을 즐긴다."},
   {id:"NA3",d:"NA",t:"생물·지구과학 등 자연 관련 과목이 흥미롭다."},
-  {id:"NA4",d:"NA",t:"동식물의 이름이나 특징을 자연스럽게 기억하는 편이다."},
 ];
 const TQ=[
   {id:"H1",d:"HU",t:"역사·철학·문학 등 인문학적 내용을 탐구하는 것이 흥미롭다."},
   {id:"H2",d:"HU",t:"사람과 사회, 문화를 깊이 이해하고 싶다."},
-  {id:"H3",d:"HU",t:"고전 작품이나 인문 교양 책을 즐겨 읽는다."},
   {id:"SS1",d:"SO",t:"경제·법·정치 등 사회 현상에 관심이 많다."},
   {id:"SS2",d:"SO",t:"사회 문제를 분석하고 해결책을 찾는 것이 흥미롭다."},
   {id:"N1",d:"SC",t:"수학·과학의 원리를 탐구하는 것이 즐겁다."},
@@ -155,7 +114,6 @@ const TQ=[
   {id:"AT2",d:"AR",t:"창작하거나 표현하는 활동이 즐겁다."},
   {id:"ME1",d:"ME",t:"생명·의료·보건 분야에 관심이 높다."},
   {id:"ME2",d:"ME",t:"사람의 건강과 치료에 기여하고 싶다."},
-  {id:"ME3",d:"ME",t:"해부학·생리학 등 생명 과학의 내용이 흥미롭다."},
 ];
 const VQ=[
   {id:"V1",d:"안정",t:"안정적인 직업과 규칙적인 생활이 나에게 중요하다."},
@@ -163,356 +121,322 @@ const VQ=[
   {id:"V3",d:"봉사",t:"사회와 타인에게 기여하는 삶을 원한다."},
   {id:"V4",d:"창의",t:"창의적인 작업과 새로운 것을 만드는 것이 중요하다."},
   {id:"V5",d:"성취",t:"높은 목표를 달성하고 성공하는 것이 나에게 중요하다."},
-  {id:"V6",d:"자율",t:"나만의 방식으로 자유롭게 일하고 싶다."},
-  {id:"V7",d:"전문성",t:"한 분야에서 최고 전문가가 되고 싶다."},
-  {id:"V8",d:"경제",t:"높은 수입과 경제적 안정이 중요하다."},
-  {id:"V9",d:"관계",t:"좋은 동료·친구와 함께 일하는 것이 중요하다."},
-  {id:"V10",d:"사회인정",t:"사회적으로 인정받고 존경받는 직업을 갖고 싶다."},
+  {id:"V6",d:"전문성",t:"한 분야에서 최고 전문가가 되고 싶다."},
 ];
 const BQ=[
   {id:"EI1",d:"EI",t:"에너지를 충전하는 나만의 방식은?",a:"사람들과 어울리며 충전된다",b:"혼자만의 시간으로 충전된다",av:"E",bv:"I"},
-  {id:"EI2",d:"EI",t:"새로운 환경에서 나는?",a:"먼저 말 걸고 빠르게 친해진다",b:"상대가 다가오길 기다린다",av:"E",bv:"I"},
-  {id:"EI3",d:"EI",t:"발표나 토론 상황에서 나는?",a:"적극적으로 내 의견을 말한다",b:"충분히 생각한 후 신중하게 말한다",av:"E",bv:"I"},
-  {id:"EI4",d:"EI",t:"생각 정리 방식은?",a:"말하면서 생각이 정리된다",b:"먼저 혼자 생각한 뒤 이야기한다",av:"E",bv:"I"},
+  {id:"EI2",d:"EI",t:"발표나 토론 상황에서 나는?",a:"적극적으로 내 의견을 말한다",b:"충분히 생각한 후 신중하게 말한다",av:"E",bv:"I"},
+  {id:"EI3",d:"EI",t:"생각 정리 방식은?",a:"말하면서 생각이 정리된다",b:"먼저 혼자 생각한 뒤 이야기한다",av:"E",bv:"I"},
   {id:"SN1",d:"SN",t:"정보를 받아들일 때 나는?",a:"구체적인 사실·데이터를 중시한다",b:"가능성·미래 비전을 더 중시한다",av:"S",bv:"N"},
   {id:"SN2",d:"SN",t:"문제 접근 방식은?",a:"경험으로 검증된 방법을 따른다",b:"새롭고 혁신적인 방식을 시도한다",av:"S",bv:"N"},
   {id:"SN3",d:"SN",t:"주의를 기울이는 것은?",a:"세부 사항과 정확한 내용",b:"전체적인 패턴과 큰 그림",av:"S",bv:"N"},
-  {id:"SN4",d:"SN",t:"나는 주로?",a:"현실적이고 실용적인 것에 집중한다",b:"상상하며 혁신적인 것을 꿈꾼다",av:"S",bv:"N"},
   {id:"TF1",d:"TF",t:"결정을 내릴 때 나는?",a:"논리와 객관적 분석을 우선한다",b:"사람들의 감정과 관계를 먼저 고려한다",av:"T",bv:"F"},
-  {id:"TF2",d:"TF",t:"갈등 상황에서 나는?",a:"옳고 그름을 따지고 논리적으로 해결한다",b:"감정을 다독이며 관계 회복을 우선한다",av:"T",bv:"F"},
-  {id:"TF3",d:"TF",t:"피드백을 줄 때 나는?",a:"사실을 직접적으로 말한다",b:"상대 감정을 배려해 부드럽게 말한다",av:"T",bv:"F"},
-  {id:"TF4",d:"TF",t:"더 힘이 되는 것은?",a:"객관적이고 정확한 평가",b:"따뜻한 공감과 격려",av:"T",bv:"F"},
+  {id:"TF2",d:"TF",t:"피드백을 줄 때 나는?",a:"사실을 직접적으로 말한다",b:"상대 감정을 배려해 부드럽게 말한다",av:"T",bv:"F"},
+  {id:"TF3",d:"TF",t:"더 힘이 되는 것은?",a:"객관적이고 정확한 평가",b:"따뜻한 공감과 격려",av:"T",bv:"F"},
   {id:"JP1",d:"JP",t:"일을 처리하는 방식은?",a:"계획을 세우고 순서대로 진행한다",b:"상황에 맞게 유연하게 대응한다",av:"J",bv:"P"},
   {id:"JP2",d:"JP",t:"마감일에 대한 나의 태도는?",a:"미리 끝내두어야 안심이 된다",b:"마감 직전에 집중력이 높아진다",av:"J",bv:"P"},
-  {id:"JP3",d:"JP",t:"여행 계획을 짤 때?",a:"상세한 일정을 미리 짠다",b:"큰 틀만 잡고 즉흥적으로 즐긴다",av:"J",bv:"P"},
-  {id:"JP4",d:"JP",t:"환경에 대한 선호는?",a:"정돈되고 체계적인 환경이 편하다",b:"자유롭고 열린 환경이 더 편하다",av:"J",bv:"P"},
+  {id:"JP3",d:"JP",t:"환경에 대한 선호는?",a:"정돈되고 체계적인 환경이 편하다",b:"자유롭고 열린 환경이 더 편하다",av:"J",bv:"P"},
 ];
 
-// ═══════════════════════════════════════════════════════════════
-//  MAPS (풍성한 설명 추가)
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════
+//  MAPS
+// ═══════════════════════════════
 const RM={
-  R:{name:"현실형",emoji:"🔧",color:"#F97316",
+  R:{name:"현실형",emoji:"🔧",color:"#F97316",stream:"이공계열",
      desc:"실용적·기술적 활동 선호. 기계·도구를 활용한 현장 중심 작업을 즐김",
-     fullDesc:"손으로 직접 만들고 기계와 도구를 다루는 것에 높은 흥미와 재능을 보입니다. 현장에서 실질적인 결과물을 만들어내는 작업에서 큰 보람을 느끼며, 추상적인 이론보다 구체적이고 실용적인 방식으로 문제를 해결하는 것을 선호합니다. 이공계 기술 직군이나 체육·스포츠 분야에서 두각을 나타낼 가능성이 높습니다.",
-     strength:["기계·도구 조작 능력","공간 지각 능력","실용적 문제 해결","체력·지구력","집중력과 정밀성"],
-     study:"실험·실습 중심 학습, 직접 만들어보는 프로젝트 방식",
-     majors:["기계공학","전기전자공학","건축학","컴퓨터공학","항공우주공학","체육교육","소방방재학","로봇공학"],
-     jobs:["기계엔지니어","건축사","전기기사","파일럿","IT엔지니어","스포츠코치","소방관","자동화전문가"],stream:"이공계열"},
-  I:{name:"탐구형",emoji:"🔬",color:"#6366F1",
+     fullDesc:"손으로 직접 만들고 기계와 도구를 다루는 것에 높은 흥미와 재능을 보입니다. 현장에서 실질적인 결과물을 만들어내는 작업에서 큰 보람을 느끼며, 추상적 이론보다 구체적·실용적 방식으로 문제를 해결하는 것을 선호합니다.",
+     strength:["기계·도구 조작","공간 지각 능력","실용적 문제 해결","체력·지구력","정밀성"],
+     study:"실험·실습 중심, 직접 만들어보는 프로젝트 방식",
+     majors:["기계공학","전기전자공학","건축학","컴퓨터공학","항공우주공학","체육교육","로봇공학","소방방재학"],
+     jobs:["기계엔지니어","건축사","전기기사","파일럿","IT엔지니어","스포츠코치","소방관"]},
+  I:{name:"탐구형",emoji:"🔬",color:"#6366F1",stream:"자연/의학계열",
      desc:"지적 탐구·분석 중시. 문제의 원리를 이해하고 연구하는 것을 선호",
-     fullDesc:"복잡한 문제를 분석하고 원리를 탐구하는 것에 강한 흥미를 보입니다. '왜?'라는 질문을 자주 던지며 깊이 파고드는 성향이 강하고, 연구·실험·데이터 분석 등 지식을 생성하는 과정에서 큰 만족감을 느낍니다. 의학·과학·AI 등 전문 연구 분야에서 뛰어난 역량을 발휘할 가능성이 높습니다.",
-     strength:["분석·추론 능력","집중적 몰입력","논리적 사고","자기주도 학습","비판적 사고"],
-     study:"개념 원리 이해 중심, 심화 탐구·논문 읽기, 혼자 집중하는 환경",
+     fullDesc:"복잡한 문제를 분석하고 원리를 탐구하는 것에 강한 흥미를 보입니다. '왜?'라는 질문을 자주 던지며 깊이 파고드는 성향이 강하고, 연구·실험·데이터 분석 등 지식을 생성하는 과정에서 큰 만족감을 느낍니다.",
+     strength:["분석·추론","집중적 몰입력","논리적 사고","자기주도 학습","비판적 사고"],
+     study:"개념 원리 이해 중심, 심화 탐구·논문 읽기",
      majors:["의학","치의학","한의학","약학","수학","물리학","화학","생명과학","심리학","AI사이언스"],
-     jobs:["의사","약사","연구원","데이터사이언티스트","생명공학자","임상심리사","AI엔지니어"],stream:"자연/의학계열"},
-  A:{name:"예술형",emoji:"🎨",color:"#EC4899",
+     jobs:["의사","약사","연구원","데이터사이언티스트","생명공학자","임상심리사","AI엔지니어"]},
+  A:{name:"예술형",emoji:"🎨",color:"#EC4899",stream:"예체능/인문계열",
      desc:"창의적 표현·심미 감각 중시. 예술·문학·음악·디자인에 강한 흥미",
-     fullDesc:"독창적인 아이디어를 표현하고 새로운 것을 창조하는 과정에서 가장 큰 에너지를 얻습니다. 틀에 박힌 규칙보다는 자유로운 발상을 통해 문제를 해결하며, 미적 감각과 감수성이 뛰어납니다. 예술·디자인·콘텐츠·문학 분야에서 자신만의 세계를 구축할 가능성이 높습니다.",
+     fullDesc:"독창적인 아이디어를 표현하고 새로운 것을 창조하는 과정에서 가장 큰 에너지를 얻습니다. 틀에 박힌 규칙보다 자유로운 발상을 통해 문제를 해결하며, 미적 감각과 감수성이 뛰어납니다.",
      strength:["창의적 사고","미적 감각","감수성과 표현력","독창적 문제 해결","예술적 집중력"],
-     study:"창작 프로젝트 중심, 자유로운 탐색과 표현, 영감 중심 학습",
+     study:"창작 프로젝트 중심, 자유로운 탐색과 표현",
      majors:["시각디자인","영상미디어","음악학","국어국문학","연극영화","패션디자인","광고홍보"],
-     jobs:["UX/UI디자이너","뮤지션","작가","영화감독","콘텐츠크리에이터","패션디자이너"],stream:"예체능/인문계열"},
-  S:{name:"사회형",emoji:"🤝",color:"#10B981",
+     jobs:["UX/UI디자이너","뮤지션","작가","영화감독","콘텐츠크리에이터","패션디자이너"]},
+  S:{name:"사회형",emoji:"🤝",color:"#10B981",stream:"사범/사회/보건계열",
      desc:"사람과의 관계 중시. 돕고 가르치고 봉사하는 활동에서 보람을 느낌",
-     fullDesc:"사람과의 관계에서 에너지를 얻고, 타인을 돕고 가르치는 활동에서 깊은 보람을 느낍니다. 공감 능력과 소통 능력이 뛰어나며, 팀 안에서 조율자·중재자 역할을 자연스럽게 맡습니다. 교육·상담·의료·사회복지 분야에서 큰 영향력을 발휘할 수 있습니다.",
-     strength:["공감 능력","소통·조율 능력","팀워크","봉사 정신","교육적 감각"],
+     fullDesc:"사람과의 관계에서 에너지를 얻고, 타인을 돕고 가르치는 활동에서 깊은 보람을 느낍니다. 공감 능력과 소통 능력이 뛰어나며, 팀 안에서 조율자·중재자 역할을 자연스럽게 맡습니다.",
+     strength:["공감 능력","소통·조율","팀워크","봉사 정신","교육적 감각"],
      study:"토론·협력 학습, 실제 사례 중심, 역할극과 현장 경험",
      majors:["교육학","사회복지학","간호학","상담심리학","사회학","아동학","특수교육","보건학"],
-     jobs:["교사","사회복지사","간호사","상담사","NGO활동가","유아교육사","의료사회복지사"],stream:"사범/사회/보건계열"},
-  E:{name:"진취형",emoji:"🚀",color:"#F59E0B",
+     jobs:["교사","사회복지사","간호사","상담사","NGO활동가","유아교육사","의료사회복지사"]},
+  E:{name:"진취형",emoji:"🚀",color:"#F59E0B",stream:"경상/법행정계열",
      desc:"리더십·설득력 발휘. 목표 달성과 조직 운영에 높은 관심",
-     fullDesc:"목표를 향해 적극적으로 나아가고 사람들을 이끄는 것에 강한 동기를 가집니다. 설득력과 추진력이 뛰어나며, 경쟁적 환경에서도 자신감 있게 행동합니다. 사업·법조·정치·경영 등 리더십이 요구되는 분야에서 두각을 나타낼 가능성이 높습니다.",
-     strength:["리더십·추진력","설득·협상 능력","목표 지향성","자신감","전략적 사고"],
-     study:"목표 설정 중심 학습, 발표·토론 활동, 실전 경험과 도전",
+     fullDesc:"목표를 향해 적극적으로 나아가고 사람들을 이끄는 것에 강한 동기를 가집니다. 설득력과 추진력이 뛰어나며, 경쟁적 환경에서도 자신감 있게 행동합니다.",
+     strength:["리더십·추진력","설득·협상","목표 지향성","자신감","전략적 사고"],
+     study:"목표 설정 중심 학습, 발표·토론 활동, 실전 경험",
      majors:["경영학","법학","정치외교학","행정학","국제학","경제학","창업벤처"],
-     jobs:["CEO·창업가","변호사","정치인","마케터","외교관","투자전문가"],stream:"경상/법행정계열"},
-  C:{name:"관습형",emoji:"📊",color:"#14B8A6",
+     jobs:["CEO·창업가","변호사","정치인","마케터","외교관","투자전문가"]},
+  C:{name:"관습형",emoji:"📊",color:"#14B8A6",stream:"경상/IT계열",
      desc:"체계적·조직적 업무 선호. 정확성과 신뢰성을 중시",
-     fullDesc:"체계와 질서를 중시하고 정확하고 꼼꼼하게 일을 처리하는 능력이 탁월합니다. 규칙과 절차를 충실히 따르며, 숫자·데이터·문서 등 정밀한 업무에서 높은 성과를 발휘합니다. 회계·금융·행정·데이터 분야에서 신뢰받는 전문가가 될 가능성이 높습니다.",
-     strength:["정확성·꼼꼼함","계획·조직 능력","수리 능력","신뢰성·책임감","데이터 분석"],
+     fullDesc:"체계와 질서를 중시하고 정확하고 꼼꼼하게 일을 처리하는 능력이 탁월합니다. 규칙과 절차를 충실히 따르며, 숫자·데이터·문서 등 정밀한 업무에서 높은 성과를 발휘합니다.",
+     strength:["정확성·꼼꼼함","계획·조직","수리 능력","신뢰성·책임감","데이터 분석"],
      study:"반복 학습과 정리 노트, 문제풀이 중심, 체계적 계획 수립",
      majors:["회계학","세무학","금융보험","경영정보","행정학","통계학","물류학"],
-     jobs:["공인회계사","세무사","금융분석가","공무원","데이터분석가","은행원"],stream:"경상/IT계열"},
+     jobs:["공인회계사","세무사","금융분석가","공무원","데이터분석가","은행원"]},
 };
 const MM={
-  LI:{name:"언어지능",emoji:"📝",color:"#A78BFA",
-      desc:"언어를 통해 생각을 명확히 표현하고 소통하는 능력",
-      majors:["국어국문학","영어영문학","언론정보학","법학","문예창작"]},
-  LM:{name:"논리수학지능",emoji:"🧮",color:"#60A5FA",
-      desc:"수와 논리로 패턴을 찾고 문제를 분석하는 능력",
-      majors:["수학","컴퓨터공학","물리학","통계학","경제학"]},
-  SP:{name:"공간지능",emoji:"🗺️",color:"#34D399",
-      desc:"공간과 시각 정보를 입체적으로 처리하는 능력",
-      majors:["건축학","시각디자인","게임공학","도시공학"]},
-  MU:{name:"음악지능",emoji:"🎵",color:"#F472B6",
-      desc:"리듬과 멜로디를 감지하고 음악적으로 표현하는 능력",
-      majors:["음악학","실용음악","음악교육","음향공학"]},
-  BK:{name:"신체운동지능",emoji:"⚡",color:"#FB923C",
-      desc:"몸을 정밀하게 조절하고 신체 활동을 즐기는 능력",
-      majors:["체육교육","스포츠과학","물리치료학","무용학"]},
-  IP:{name:"대인관계지능",emoji:"🌟",color:"#4ADE80",
-      desc:"타인의 감정과 의도를 파악하고 관계를 형성하는 능력",
-      majors:["심리학","사회복지학","교육학","경영학"]},
-  IA:{name:"자기이해지능",emoji:"🧠",color:"#818CF8",
-      desc:"자신의 감정·동기·강점을 깊이 이해하는 능력",
-      majors:["심리학","철학","교육학","상담학"]},
-  NA:{name:"자연탐구지능",emoji:"🌿",color:"#2DD4BF",
-      desc:"자연 현상을 관찰하고 생태계를 이해하는 능력",
-      majors:["생명과학","환경공학","수의학","지구과학"]},
+  LI:{name:"언어지능",emoji:"📝",color:"#A78BFA",desc:"언어를 통해 생각을 명확히 표현하고 소통하는 능력",majors:["국어국문학","영어영문학","언론정보학","법학","문예창작"]},
+  LM:{name:"논리수학지능",emoji:"🧮",color:"#60A5FA",desc:"수와 논리로 패턴을 찾고 문제를 분석하는 능력",majors:["수학","컴퓨터공학","물리학","통계학","경제학"]},
+  SP:{name:"공간지능",emoji:"🗺️",color:"#34D399",desc:"공간과 시각 정보를 입체적으로 처리하는 능력",majors:["건축학","시각디자인","게임공학","도시공학"]},
+  MU:{name:"음악지능",emoji:"🎵",color:"#F472B6",desc:"리듬과 멜로디를 감지하고 음악적으로 표현하는 능력",majors:["음악학","실용음악","음악교육","음향공학"]},
+  BK:{name:"신체운동지능",emoji:"⚡",color:"#FB923C",desc:"몸을 정밀하게 조절하고 신체 활동을 즐기는 능력",majors:["체육교육","스포츠과학","물리치료학","무용학"]},
+  IP:{name:"대인관계지능",emoji:"🌟",color:"#4ADE80",desc:"타인의 감정과 의도를 파악하고 관계를 형성하는 능력",majors:["심리학","사회복지학","교육학","경영학"]},
+  IA:{name:"자기이해지능",emoji:"🧠",color:"#818CF8",desc:"자신의 감정·동기·강점을 깊이 이해하는 능력",majors:["심리학","철학","교육학","상담학"]},
+  NA:{name:"자연탐구지능",emoji:"🌿",color:"#2DD4BF",desc:"자연 현상을 관찰하고 생태계를 이해하는 능력",majors:["생명과학","환경공학","수의학","지구과학"]},
 };
-const TM={
-  HU:{name:"인문계열",emoji:"📚",color:"#A78BFA"},
-  SO:{name:"사회계열",emoji:"⚖️",color:"#60A5FA"},
-  SC:{name:"자연계열",emoji:"🔬",color:"#34D399"},
-  EN:{name:"공학계열",emoji:"⚙️",color:"#FB923C"},
-  AR:{name:"예체능계열",emoji:"🎭",color:"#F472B6"},
-  ME:{name:"의약보건계열",emoji:"🏥",color:"#4ADE80"},
-};
-const MBTI_DESC={
-  INTJ:"독창적인 전략가 · 체계적 계획과 날카로운 통찰력",
-  INTP:"논리적 사색가 · 원리 탐구와 창의적 분석",
-  ENTJ:"대담한 지도자 · 강력한 추진력과 전략적 리더십",
-  ENTP:"혁신적 토론가 · 아이디어 발산과 도전적 사고",
-  INFJ:"통찰력 있는 이상주의자 · 깊은 공감과 비전 제시",
-  INFP:"열정적인 가치 탐구자 · 진정성과 창의적 표현",
-  ENFJ:"정의로운 사회운동가 · 타인 성장을 이끄는 리더",
-  ENFP:"재기발랄한 활동가 · 넘치는 열정과 창의적 소통",
-  ISTJ:"청렴한 실무자 · 신뢰할 수 있는 책임감과 꼼꼼함",
-  ISFJ:"헌신적인 수호자 · 따뜻한 배려와 성실한 지원",
-  ESTJ:"목표 중심 경영자 · 체계적 조직과 강한 실행력",
-  ESFJ:"따뜻한 협력자 · 조화로운 관계와 헌신적 돌봄",
-  ISTP:"만능 재주꾼 · 현장 감각과 즉각적 문제 해결",
-  ISFP:"감각적 예술가 · 섬세한 감수성과 독창적 표현",
-  ESTP:"현실 감각 행동가 · 빠른 판단과 역동적 실행",
-  ESFP:"자유로운 퍼포머 · 밝은 에너지와 즉흥적 창의성",
-};
-const MBTI_STUDY={
-  J:"계획을 미리 세우고 단계적으로 실행하는 학습이 효과적입니다. 주간·월간 학습 계획표를 작성하고, 목표를 구체적으로 설정하는 방식이 잘 맞습니다.",
-  P:"유연하고 자유로운 학습 환경에서 더 잘 발휘됩니다. 다양한 방법을 시도해보며 자신만의 스타일을 찾는 탐색적 학습이 효과적입니다.",
-  E:"그룹 스터디, 발표·토론 활동을 통해 에너지를 얻으며 학습 효율이 높아집니다. 소리 내어 설명하거나 친구들과 함께하는 방식이 유리합니다.",
-  I:"조용한 환경에서 혼자 집중하는 심화 학습이 효과적입니다. 충분한 사색 시간과 혼자만의 공부 루틴을 확보하는 것이 중요합니다.",
-  T:"논리적 근거와 체계적 분석을 통해 학습합니다. '왜 그런가'를 이해하고 나서 암기하는 방식이 효과적입니다.",
-  F:"의미와 가치를 연결할 때 학습 동기가 높아집니다. 실제 사례나 사람과 연결되는 스토리텔링 학습이 기억에 오래 남습니다.",
-  N:"큰 그림을 먼저 파악하고 세부 사항을 채우는 방식이 맞습니다. 개념 마인드맵, 아이디어 연결, 창의적 프로젝트 활동이 효과적입니다.",
-  S:"구체적인 사실과 경험에서 출발하는 학습이 효과적입니다. 반복 연습, 실습, 예시 중심 학습으로 실력을 쌓아가는 방식이 적합합니다.",
-};
+const TM={HU:{name:"인문계열",emoji:"📚",color:"#A78BFA"},SO:{name:"사회계열",emoji:"⚖️",color:"#60A5FA"},SC:{name:"자연계열",emoji:"🔬",color:"#34D399"},EN:{name:"공학계열",emoji:"⚙️",color:"#FB923C"},AR:{name:"예체능계열",emoji:"🎭",color:"#F472B6"},ME:{name:"의약보건계열",emoji:"🏥",color:"#4ADE80"}};
+const MBTI_DESC={INTJ:"독창적인 전략가",INTP:"논리적 사색가",ENTJ:"대담한 지도자",ENTP:"혁신적 토론가",INFJ:"통찰력 있는 이상주의자",INFP:"열정적인 가치 탐구자",ENFJ:"정의로운 사회운동가",ENFP:"재기발랄한 활동가",ISTJ:"청렴한 실무자",ISFJ:"헌신적인 수호자",ESTJ:"목표 중심 경영자",ESFJ:"따뜻한 협력자",ISTP:"만능 재주꾼",ISFP:"감각적 예술가",ESTP:"현실 감각 행동가",ESFP:"자유로운 퍼포머"};
+const MBTI_STUDY={J:"계획을 미리 세우고 단계적으로 실행하는 학습이 효과적입니다. 주간·월간 학습 계획표를 작성하고 목표를 구체적으로 설정하는 방식이 잘 맞습니다.",P:"유연하고 자유로운 학습 환경에서 더 잘 발휘됩니다. 다양한 방법을 시도해보며 자신만의 스타일을 찾는 탐색적 학습이 효과적입니다.",E:"그룹 스터디, 발표·토론 활동을 통해 에너지를 얻으며 학습 효율이 높아집니다. 소리 내어 설명하거나 친구들과 함께하는 방식이 유리합니다.",I:"조용한 환경에서 혼자 집중하는 심화 학습이 효과적입니다. 충분한 사색 시간과 혼자만의 공부 루틴을 확보하는 것이 중요합니다.",T:"논리적 근거와 체계적 분석을 통해 학습합니다. '왜 그런가'를 이해하고 나서 암기하는 방식이 효과적입니다.",F:"의미와 가치를 연결할 때 학습 동기가 높아집니다. 실제 사례나 사람과 연결되는 스토리텔링 학습이 기억에 오래 남습니다.",N:"큰 그림을 먼저 파악하고 세부 사항을 채우는 방식이 맞습니다. 개념 마인드맵, 아이디어 연결, 창의적 프로젝트 활동이 효과적입니다.",S:"구체적인 사실과 경험에서 출발하는 학습이 효과적입니다. 반복 연습, 실습, 예시 중심 학습으로 실력을 쌓아가는 방식이 적합합니다."};
 
-// ═══════════════════════════════════════════════════════════════
-//  ANALYSIS ENGINE
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════
+//  PATTERN-BASED ANALYSIS ENGINE
+// ═══════════════════════════════
 function analyze(answers, mbtiMode, mbtiKnown) {
   const calcAvg = (qs, dims) => {
     const sc={}, cnt={};
-    dims.forEach(d => { sc[d]=0; cnt[d]=0; });
-    qs.forEach(q => {
-      const v = answers[q.id];
-      if (v !== undefined && sc[q.d] !== undefined) { sc[q.d] += Number(v); cnt[q.d]++; }
-    });
-    dims.forEach(d => { if (cnt[d] > 0) sc[d] = parseFloat((sc[d]/cnt[d]).toFixed(2)); });
-    return Object.entries(sc).sort(([,a],[,b]) => b-a).map(([k,v]) => ({key:k, score:v}));
+    dims.forEach(d=>{sc[d]=0;cnt[d]=0;});
+    qs.forEach(q=>{const v=answers[q.id]; if(v!==undefined&&sc[q.d]!==undefined){sc[q.d]+=Number(v);cnt[q.d]++;}});
+    dims.forEach(d=>{if(cnt[d]>0)sc[d]=parseFloat((sc[d]/cnt[d]).toFixed(2));});
+    return Object.entries(sc).sort(([,a],[,b])=>b-a).map(([k,v])=>({key:k,score:v}));
   };
-  const riasec = calcAvg(RQ, ["R","I","A","S","E","C"]);
-  const mi     = calcAvg(MQ, ["LI","LM","SP","MU","BK","IP","IA","NA"]);
-  const tend   = calcAvg(TQ, ["HU","SO","SC","EN","AR","ME"]);
-  const vals = {};
-  VQ.forEach(q => { if (answers[q.id] !== undefined) vals[q.d] = Number(answers[q.id]); });
-  const valueTop = Object.entries(vals).sort(([,a],[,b]) => b-a).slice(0,3).map(([k]) => k);
+  const riasec=calcAvg(RQ,["R","I","A","S","E","C"]);
+  const mi=calcAvg(MQ,["LI","LM","SP","MU","BK","IP","IA","NA"]);
+  const tend=calcAvg(TQ,["HU","SO","SC","EN","AR","ME"]);
+  const vals={};
+  VQ.forEach(q=>{if(answers[q.id]!==undefined)vals[q.d]=Number(answers[q.id]);});
+  const valueTop=Object.entries(vals).sort(([,a],[,b])=>b-a).slice(0,3).map(([k])=>k);
 
-  let mbtiType = "";
-  if (mbtiMode === "input") mbtiType = mbtiKnown.toUpperCase();
-  else if (mbtiMode === "test") {
-    const c = {E:0,I:0,S:0,N:0,T:0,F:0,J:0,P:0};
-    BQ.forEach(q => { const ans = answers[q.id]; if (!ans) return; c[ans==="A" ? q.av : q.bv]++; });
-    mbtiType = `${c.E>=c.I?"E":"I"}${c.S>=c.N?"S":"N"}${c.T>=c.F?"T":"F"}${c.J>=c.P?"J":"P"}`;
+  let mbtiType="";
+  if(mbtiMode==="input") mbtiType=mbtiKnown.toUpperCase();
+  else if(mbtiMode==="test"){
+    const c={E:0,I:0,S:0,N:0,T:0,F:0,J:0,P:0};
+    BQ.forEach(q=>{const ans=answers[q.id];if(!ans)return;c[ans==="A"?q.av:q.bv]++;});
+    mbtiType=`${c.E>=c.I?"E":"I"}${c.S>=c.N?"S":"N"}${c.T>=c.F?"T":"F"}${c.J>=c.P?"J":"P"}`;
   }
 
-  const r1=riasec[0]?.key, r2=riasec[1]?.key, mi1=mi[0]?.key, mi2=mi[1]?.key, tend1=tend[0]?.key;
+  const r1=riasec[0]?.key, r2=riasec[1]?.key, r3=riasec[2]?.key;
+  const mi1=mi[0]?.key, mi2=mi[1]?.key, tend1=tend[0]?.key, tend2=tend[1]?.key;
+
+  // ── 전공/직업 추천 (패턴 기반 교차분석) ──
   const majorSet=new Set(), jobSet=new Set();
-  RM[r1]?.majors?.slice(0,4).forEach(m => majorSet.add(m));
-  RM[r2]?.majors?.slice(0,3).forEach(m => majorSet.add(m));
-  RM[r1]?.jobs?.slice(0,3).forEach(j => jobSet.add(j));
-  RM[r2]?.jobs?.slice(0,2).forEach(j => jobSet.add(j));
-  MM[mi1]?.majors?.slice(0,2).forEach(m => majorSet.add(m));
-  MM[mi2]?.majors?.slice(0,1).forEach(m => majorSet.add(m));
+  RM[r1]?.majors?.slice(0,4).forEach(m=>majorSet.add(m));
+  RM[r2]?.majors?.slice(0,3).forEach(m=>majorSet.add(m));
+  MM[mi1]?.majors?.slice(0,3).forEach(m=>majorSet.add(m));
+  MM[mi2]?.majors?.slice(0,2).forEach(m=>majorSet.add(m));
+  RM[r1]?.jobs?.slice(0,4).forEach(j=>jobSet.add(j));
+  RM[r2]?.jobs?.slice(0,3).forEach(j=>jobSet.add(j));
 
-  const pts = [];
-  if (r1==="I" && ["LM","NA"].includes(mi1)) pts.push("수리·과학 탐구형 → 의약·이공계 연구직 강력 추천");
-  if (r1==="I" && mi1==="LI") pts.push("인문·사회 연구 성향 → 심리학·사회과학 탐색 권장");
-  if (r1==="A" && mi1==="SP") pts.push("시각적 창의력 우수 → 디자인·건축·영상 분야 적합");
-  if (r1==="A" && mi1==="MU") pts.push("음악·퍼포먼스 두드러짐 → 실용음악·공연예술 탐색");
-  if (r1==="S" && mi1==="IP") pts.push("대인관계 탁월 → 교육·상담·사회복지 분야 강점");
-  if (r1==="E" && mi1==="LI") pts.push("리더십 + 언어능력 → 법·경영·정치외교 적합");
-  if (r1==="R" && mi1==="LM") pts.push("공학적 사고 강함 → SW·기계·전자공학 추천");
-  if (r1==="C" && mi1==="LM") pts.push("분석·수리 능력 → 금융·회계·통계·행정 적합");
-  if (pts.length === 0) pts.push(`${RM[r1]?.name} + ${MM[mi1]?.name} 조합 → ${RM[r1]?.stream} 심화 탐색 권장`);
-  if (mbtiType.includes("J")) pts.push("J형: 체계적 학습계획 수립이 강점 — 목표 기반 진로 설계 추천");
-  if (mbtiType.includes("P")) pts.push("P형: 탐색적 학습 스타일 — 다양한 체험 후 방향 좁혀가는 전략 적합");
-  if (mbtiType.includes("N")) pts.push("N형: 아이디어·창의성 중심 직군 높은 적합도");
-  if (mbtiType.includes("T")) pts.push("T형: 논리·분석 기반 직군(이공계·법·금융) 적합도 상승");
-  if (mbtiType.includes("F")) pts.push("F형: 대인서비스·교육·상담 계열 높은 직업 만족도 예상");
+  // ── 패턴 상담 포인트 ──
+  const pts=[];
+  const patterns=[
+    {cond:r1==="I"&&["LM","NA"].includes(mi1), msg:"수리·과학 탐구형 → 의약·이공계 연구직 강력 추천. 수능 과탐 집중 전략이 유효합니다."},
+    {cond:r1==="I"&&mi1==="IP", msg:"연구+대인관계 조합 → 임상심리·사회과학·교육연구 분야 적합"},
+    {cond:r1==="I"&&mi1==="LI", msg:"인문·사회 연구 성향 → 심리학·사회과학·언론학 탐색 권장"},
+    {cond:r1==="A"&&mi1==="SP", msg:"시각적 창의력 우수 → 디자인·건축·영상·게임 분야 최적합"},
+    {cond:r1==="A"&&mi1==="MU", msg:"음악·퍼포먼스 두드러짐 → 실용음악·공연예술·음향 분야 탐색"},
+    {cond:r1==="A"&&mi1==="LI", msg:"언어+예술 조합 → 문예창작·광고카피·콘텐츠 기획 분야 강점"},
+    {cond:r1==="S"&&mi1==="IP", msg:"대인관계 탁월 → 교육·상담·사회복지 분야 강점. 생기부 교육봉사·멘토링 활동 권장"},
+    {cond:r1==="S"&&mi1==="IA", msg:"공감+자기성찰 → 상담심리·철학·교육학 깊이 탐색 추천"},
+    {cond:r1==="E"&&mi1==="LI", msg:"리더십+언어능력 → 법·경영·정치외교·언론 적합"},
+    {cond:r1==="E"&&mi1==="LM", msg:"추진력+논리 → 경제·금융·창업벤처 분야 강점"},
+    {cond:r1==="R"&&mi1==="LM", msg:"공학적 사고 강함 → SW·기계·전자공학·AI 추천"},
+    {cond:r1==="R"&&mi1==="BK", msg:"현장 기술+신체능력 → 스포츠과학·물리치료·산업공학 적합"},
+    {cond:r1==="C"&&mi1==="LM", msg:"분석·수리 능력 탁월 → 금융·회계·통계·행정·빅데이터 적합"},
+    {cond:r1==="C"&&mi1==="LI", msg:"체계+언어 조합 → 행정·법률사무·문헌정보·경영정보 적합"},
+    {cond:r1==="I"&&r2==="E", msg:"연구+리더십 조합 → 의대·법대·경영대학원 등 고학력 전문직 경로 추천"},
+    {cond:r1==="S"&&r2==="I", msg:"봉사+탐구 조합 → 의료·보건·임상 분야 이상적"},
+    {cond:r1==="E"&&r2==="S", msg:"리더십+사람 지향 → 교육행정·인사·HR·사회적기업 적합"},
+    {cond:tend1==="ME"&&["I","S"].includes(r1), msg:"의약보건계열 성향 강함 → 수능 과탐·수학 집중, 의치한약 목표 설정 권장"},
+  ];
+  patterns.forEach(p=>{if(p.cond)pts.push(p.msg);});
+  if(pts.length===0) pts.push(`${RM[r1]?.name}+${MM[mi1]?.name} 조합 → ${RM[r1]?.stream} 심화 탐색 권장`);
+  if(mbtiType.includes("J")) pts.push("J형 강점: 체계적 학습계획 수립 → 목표 기반 수시 전략 설계 추천");
+  if(mbtiType.includes("N")) pts.push("N형 특성: 아이디어·창의성 중심 직군 높은 적합도 → 논술·자소서에서 강점 발휘 가능");
+  if(mbtiType.includes("T")) pts.push("T형 특성: 논리·분석 기반 직군(이공계·법·금융) 적합도 상승");
+  if(mbtiType.includes("F")) pts.push("F형 특성: 대인서비스·교육·상담 계열 높은 직업 만족도 예상");
 
-  // 종합 요약문 생성
-  const summary = `${RM[r1]?.name}(${r1})과 ${RM[r2]?.name}(${r2})의 복합 성향을 가진 ${info_placeholder}님은 ${RM[r1]?.fullDesc?.split('.')[0]}. 다중지능 측면에서는 ${MM[mi1]?.name}이 특히 두드러지며, 이는 ${MM[mi1]?.desc}에서 강점을 보임을 의미합니다. 계열 성향으로는 ${TM[tend1]?.name}에 가장 강한 흥미를 보이고 있어, 향후 진로 선택 시 이 방향을 중심으로 탐색하는 것이 효과적입니다.`;
+  const acts=[];
+  if(["I","R"].includes(r1)) acts.push(...["과학탐구실험 동아리","R&E 연구 프로젝트","코딩·SW 개발 동아리"]);
+  else if(r1==="A") acts.push(...["예술·창작 동아리","교지편집부","영상·미디어 제작 동아리"]);
+  else if(r1==="S") acts.push(...["교육봉사·멘토링","학교 상담 또래 도우미","사회복지 동아리"]);
+  else if(r1==="E") acts.push(...["학생회 임원 활동","창업·경제 동아리","교내 토론·모의UN"]);
+  else if(r1==="C") acts.push(...["수학·경제 올림피아드","통계·데이터 분석 프로젝트","자격증 취득 활동"]);
+  if(acts.length<3) acts.push("독서토론 동아리","진로체험 탐방","교내 발표·탐구 활동");
 
-  const acts = [];
-  if (["I","R"].includes(r1)) acts.push(...["과학탐구대회","R&E 프로젝트","코딩·SW 동아리"]);
-  if (r1==="A") acts.push(...["예술·창작 동아리","교지편집부","영상제작 동아리"]);
-  if (r1==="S") acts.push(...["교육봉사","멘토링 프로그램","사회복지 동아리"]);
-  if (r1==="E") acts.push(...["학생회","창업 동아리","교내 토론대회"]);
-  if (r1==="C") acts.push(...["수학올림피아드","경제·금융 동아리","자격증 준비"]);
-  if (acts.length < 3) acts.push("독서토론","진로체험","교내 발표 활동");
-
-  return { riasec, mi, tend, valueTop, mbtiType, r1, r2, mi1, mi2, tend1,
-    cross: { majors:[...majorSet].slice(0,10), jobs:[...jobSet].slice(0,8), pts, acts, summary } };
+  return {riasec,mi,tend,valueTop,mbtiType,r1,r2,r3,mi1,mi2,tend1,tend2,
+    cross:{majors:[...majorSet].slice(0,10),jobs:[...jobSet].slice(0,8),pts,acts}};
 }
-// 더미 변수 (실제 사용시 info.name 주입)
-const info_placeholder = "학생";
 
-// ═══════════════════════════════════════════════════════════════
-//  SVG / CHART
-// ═══════════════════════════════════════════════════════════════
-function Radar({items, size=180}) {
-  const cx=size/2, cy=size/2, r=size*.33, n=items.length;
-  const ang = i => (i*2*Math.PI/n)-Math.PI/2;
-  const pt  = (i,v) => [cx+r*(v/5)*Math.cos(ang(i)), cy+r*(v/5)*Math.sin(ang(i))];
-  const poly = items.map((it,i) => pt(i,it.score).join(",")).join(" ");
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{overflow:"visible"}}>
-      {[.25,.5,.75,1].map(lv=>(
-        <polygon key={lv} fill="none" stroke="rgba(167,139,250,0.1)" strokeWidth="1"
-          points={items.map((_,i) => [cx+r*lv*Math.cos(ang(i)),cy+r*lv*Math.sin(ang(i))].join(",")).join(" ")}/>
+// ═══════════════════════════════
+//  AI 코멘트 생성 (Claude API)
+// ═══════════════════════════════
+async function generateAIComment(sub) {
+  const apiReady = CLAUDE_API_KEY !== "YOUR_CLAUDE_API_KEY";
+  if (!apiReady) return null;
+  const s = sub;
+  const prompt = `당신은 한국의 진로진학 상담 전문가입니다.
+다음은 고등학생의 진로검사 결과입니다. 이 학생에게 따뜻하고 구체적인 진로 코멘트를 한국어로 작성해주세요.
+
+이름: ${s.info?.name}
+학년: ${s.info?.grade}
+RIASEC 1순위: ${s.r1}형(${s.riasec?.[0]?.score})  2순위: ${s.r2}형(${s.riasec?.[1]?.score})
+주력 다중지능: ${s.mi1}(${s.mi?.[0]?.score})  2순위: ${s.mi2}(${s.mi?.[1]?.score})
+계열 성향 1순위: ${s.tend1}  2순위: ${s.tend2||""}
+직업가치관 Top3: ${s.valueTop?.join(", ")}
+MBTI: ${s.mbtiType||"미검사"}
+
+다음 형식으로 작성:
+1. 이 학생의 핵심 강점 패턴 (2~3문장)
+2. 가장 잘 맞는 진로 방향 (구체적 전공/직업 언급, 2~3문장)
+3. 고등학교 생활 전략 조언 (생기부 활동 포함, 2~3문장)
+4. 격려 메시지 (1~2문장)
+
+전체 300~400자 이내로, 딱딱하지 않고 학생에게 직접 말하는 따뜻한 톤으로 작성하세요.`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{"Content-Type":"application/json","x-api-key":CLAUDE_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:600,messages:[{role:"user",content:prompt}]})
+    });
+    const data = await res.json();
+    return data.content?.[0]?.text || null;
+  } catch(e) { return null; }
+}
+
+// ═══════════════════════════════
+//  CHARTS
+// ═══════════════════════════════
+function Radar({items,size=180}){
+  const cx=size/2,cy=size/2,r=size*.33,n=items.length;
+  const ang=i=>(i*2*Math.PI/n)-Math.PI/2;
+  const pt=(i,v)=>[cx+r*(v/5)*Math.cos(ang(i)),cy+r*(v/5)*Math.sin(ang(i))];
+  const poly=items.map((it,i)=>pt(i,it.score).join(",")).join(" ");
+  const grids=[1,2,3,4,5];
+  return(
+    <svg width={size} height={size} className="radar-svg">
+      {grids.map(g=>(
+        <polygon key={g} points={items.map((_,i)=>pt(i,g).join(",")).join(" ")}
+          fill="none" stroke="rgba(139,92,246,.12)" strokeWidth={g===5?1.5:0.8}/>
       ))}
-      {items.map((_,i) => <line key={i} x1={cx} y1={cy} x2={cx+r*Math.cos(ang(i))} y2={cy+r*Math.sin(ang(i))} stroke="rgba(167,139,250,0.07)" strokeWidth="1"/>)}
-      <polygon points={poly} fill="rgba(109,33,176,0.18)" stroke="#7C3AED" strokeWidth="1.5"/>
-      {items.map((it,i) => { const [x,y]=pt(i,it.score); return <circle key={i} cx={x} cy={y} r="3.5" fill="#A78BFA"/>; })}
-      {items.map((it,i) => {
-        const lr=r+20, lx=cx+lr*Math.cos(ang(i)), ly=cy+lr*Math.sin(ang(i));
-        return (<g key={i}>
-          <text x={lx} y={ly-3} textAnchor="middle" fontSize="11" fill="rgba(215,205,255,.8)">{it.emoji}</text>
-          <text x={lx} y={ly+9} textAnchor="middle" fontSize="6.5" fill="rgba(170,150,220,.6)">{it.label}</text>
+      {items.map((_,i)=>{const[x,y]=pt(i,5);return<line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="rgba(139,92,246,.1)" strokeWidth={0.8}/>;})}
+      <polygon points={poly} fill="rgba(139,92,246,.18)" stroke="rgba(167,139,250,.7)" strokeWidth={1.5}/>
+      {items.map((it,i)=>{const[x,y]=pt(i,it.score);return<circle key={i} cx={x} cy={y} r={3} fill="#A78BFA"/>;})}
+      {items.map((it,i)=>{
+        const lr=r+22,lx=cx+lr*Math.cos(ang(i)),ly=cy+lr*Math.sin(ang(i));
+        return(<g key={i}>
+          <text x={lx} y={ly-3} textAnchor="middle" fontSize="12" fill="rgba(221,214,254,.9)">{it.emoji}</text>
+          <text x={lx} y={ly+9} textAnchor="middle" fontSize="6.5" fill="rgba(167,139,250,.7)">{it.label}</text>
         </g>);
       })}
     </svg>
   );
 }
-function Bar({label, score, rank, color}) {
-  return (
-    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-      <div style={{flex:1}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-          <span style={{fontSize:12.5,color:rank<2?"#C4B5FD":"rgba(170,155,220,.5)",fontWeight:rank<2?600:400}}>{label}</span>
-          <span style={{fontSize:11,color:"rgba(145,130,195,.45)"}}>{Math.round(score*20)}점</span>
-        </div>
-        <div style={{height:4,background:"rgba(255,255,255,.07)",borderRadius:99,overflow:"hidden"}}>
-          <div style={{height:"100%",width:`${(score/5)*100}%`,borderRadius:99,transition:"width .6s",
-            background:rank===0?color:rank===1?color+"88":"rgba(255,255,255,.13)"}}/>
-        </div>
+function Bar({label,score,rank,color}){
+  return(
+    <div style={{marginBottom:9}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+        <span style={{fontSize:13,color:rank<2?"#E2D9FE":"rgba(196,181,253,.6)",fontWeight:rank<2?700:400}}>{label}</span>
+        <span style={{fontSize:11.5,color:rank<2?"rgba(196,181,253,.9)":"rgba(167,139,250,.45)",fontWeight:rank<2?600:400}}>{Math.round(score*20)}점</span>
+      </div>
+      <div className="bar-track" style={{height:5,background:"rgba(255,255,255,.08)",borderRadius:99,overflow:"hidden"}}>
+        <div style={{height:"100%",width:`${(score/5)*100}%`,borderRadius:99,transition:"width .6s",
+          background:rank===0?color:rank===1?color+"99":"rgba(255,255,255,.14)"}}/>
       </div>
     </div>
   );
 }
-function DelRow({children, onDelete}) {
-  const [confirm,setConfirm]=useState(false);
-  return (
-    <div style={{display:"flex",alignItems:"stretch",gap:0,marginBottom:2,borderRadius:10,overflow:"hidden",background:"rgba(255,255,255,.025)"}}>
-      <div style={{flex:1,minWidth:0}}>{children}</div>
-      <button onClick={()=>{if(confirm)onDelete();else{setConfirm(true);setTimeout(()=>setConfirm(false),2500);}}}
-        style={{flexShrink:0,width:48,border:"none",cursor:"pointer",transition:"all .18s",
-          background:confirm?"rgba(239,68,68,.25)":"rgba(255,255,255,.03)",
-          borderLeft:"1px solid rgba(255,255,255,.06)",
-          display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2}}>
-        <span style={{fontSize:16}}>{confirm?"❗":"🗑"}</span>
-        <span style={{fontSize:8.5,color:confirm?"#FCA5A5":"rgba(180,160,220,.35)",fontWeight:600,letterSpacing:.3}}>{confirm?"확인":"삭제"}</span>
-      </button>
-    </div>
-  );
-}
 
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════
 //  CSS
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════
 const CSS=`
 @import url('https://fonts.googleapis.com/css2?family=Gmarket+Sans:wght@300;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
-html,body{min-height:100vh;background:#060412;}
+html,body{min-height:100vh;background:#08071A;}
 ::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-thumb{background:rgba(124,58,237,.3);border-radius:99px;}
 .root{min-height:100vh;padding:28px 16px;
-  background:radial-gradient(ellipse 70% 50% at 50% -5%,rgba(109,33,176,.22) 0%,transparent 55%),
-  radial-gradient(ellipse 50% 35% at 85% 85%,rgba(49,46,129,.12) 0%,transparent 45%),
-  linear-gradient(160deg,#060412 0%,#0C0820 55%,#080518 100%);
-  font-family:'Noto Sans KR',sans-serif;color:#F0EEFF;
+  background:radial-gradient(ellipse 60% 40% at 50% 0%,rgba(88,28,220,.18) 0%,transparent 60%),
+  radial-gradient(ellipse 40% 30% at 90% 90%,rgba(30,27,100,.15) 0%,transparent 50%),
+  linear-gradient(170deg,#08071A 0%,#0D0B28 60%,#090718 100%);
+  font-family:'Noto Sans KR',sans-serif;color:#EDE9FF;
   display:flex;align-items:center;justify-content:center;}
 .root.top{align-items:flex-start;padding-top:36px;}
+.root.pub{background:radial-gradient(ellipse 60% 40% at 50% 0%,rgba(15,118,110,.12) 0%,transparent 55%),linear-gradient(170deg,#06111A 0%,#07131E 60%,#060F18 100%);}
 .card{position:relative;max-width:660px;width:100%;
-  background:rgba(255,255,255,.032);backdrop-filter:blur(28px);
-  border:1px solid rgba(167,139,250,.1);border-radius:28px;padding:44px 40px;
-  box-shadow:0 48px 120px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.055);}
+  background:rgba(255,255,255,.03);backdrop-filter:blur(32px);
+  border:1px solid rgba(139,92,246,.13);border-radius:28px;padding:44px 40px;
+  box-shadow:0 48px 120px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.05);}
 .card.wide{max-width:820px;}
-
+.card.pub-card{border-color:rgba(20,184,166,.15);}
+.card.fu{animation:fu .4s ease;}
+@keyframes fu{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+@keyframes fl{from{opacity:0;transform:translateX(16px);}to{opacity:1;transform:translateX(0);}}
+.fl{animation:fl .25s ease;}
 .logo-row{display:flex;align-items:center;gap:14px;margin-bottom:32px;}
 .logo-box{width:46px;height:46px;border-radius:13px;flex-shrink:0;overflow:hidden;
-  background:linear-gradient(140deg,#6B21A8,#9333EA);display:flex;align-items:center;justify-content:center;
-  font-size:22px;box-shadow:0 6px 24px rgba(147,51,234,.35);}
+  background:linear-gradient(140deg,#5B21B6,#7C3AED);display:flex;align-items:center;justify-content:center;
+  font-size:22px;box-shadow:0 6px 24px rgba(124,58,237,.3);}
 .logo-box img{width:100%;height:100%;object-fit:contain;}
 .logo-name{font-family:'Gmarket Sans',sans-serif;font-size:21px;font-weight:700;letter-spacing:1px;}
-.logo-name .p{color:#9333EA;}.logo-name .t{color:#94A3B8;}
-.logo-tag{font-size:9.5px;color:rgba(160,140,210,.5);letter-spacing:3.5px;text-transform:uppercase;margin-top:2px;}
-
+.logo-name .p{color:#8B5CF6;}.logo-name .t{color:#64748B;}
+.logo-tag{font-size:9.5px;color:rgba(148,128,200,.5);letter-spacing:3.5px;text-transform:uppercase;margin-top:2px;}
 h1{font-family:'Gmarket Sans',sans-serif;font-size:30px;font-weight:700;line-height:1.35;
-  background:linear-gradient(130deg,#DDD6FE,#A78BFA,#E879F9);-webkit-background-clip:text;
+  background:linear-gradient(130deg,#E2D9FE,#A78BFA,#C084FC);-webkit-background-clip:text;
   -webkit-text-fill-color:transparent;margin-bottom:14px;}
-h2{font-family:'Gmarket Sans',sans-serif;font-size:20px;font-weight:700;color:#E8E2FF;margin-bottom:8px;}
-.muted{font-size:14px;color:rgba(190,175,255,.6);line-height:1.8;margin-bottom:24px;}
+h2{font-family:'Gmarket Sans',sans-serif;font-size:20px;font-weight:700;color:#E2D9FE;margin-bottom:8px;}
+.muted{font-size:14px;color:rgba(180,165,230,.6);line-height:1.8;margin-bottom:24px;}
 .badge-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px;}
-.badge{padding:5px 13px;border-radius:99px;font-size:11px;font-weight:500;
-  background:rgba(109,33,176,.14);border:1px solid rgba(167,139,250,.18);color:#C4B5FD;}
-
+.badge{padding:5px 13px;border-radius:99px;font-size:11px;font-weight:500;background:rgba(91,33,182,.14);border:1px solid rgba(139,92,246,.2);color:#C4B5FD;}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
   padding:15px 28px;border-radius:14px;border:none;cursor:pointer;
   font-family:'Gmarket Sans',sans-serif;font-size:15px;font-weight:700;letter-spacing:.3px;
-  background:linear-gradient(135deg,#6B21A8 0%,#7C3AED 100%);color:#fff;
-  transition:all .2s;box-shadow:0 8px 28px rgba(109,33,176,.3);}
-.btn:hover{transform:translateY(-2px);box-shadow:0 14px 38px rgba(109,33,176,.45);}
+  background:linear-gradient(135deg,#5B21B6 0%,#7C3AED 100%);color:#fff;
+  transition:all .2s;box-shadow:0 8px 28px rgba(91,33,182,.28);}
+.btn:hover{transform:translateY(-2px);box-shadow:0 14px 38px rgba(91,33,182,.42);}
 .btn:active{transform:none;}
 .btn:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:none;}
-.btn-g{background:rgba(255,255,255,.055);box-shadow:none;border:1px solid rgba(255,255,255,.1);color:rgba(210,200,255,.75);}
-.btn-g:hover{background:rgba(255,255,255,.09);box-shadow:none;}
+.btn-g{background:rgba(255,255,255,.055);box-shadow:none;border:1px solid rgba(255,255,255,.1);color:rgba(200,188,255,.7);}
+.btn-g:hover{background:rgba(255,255,255,.085);box-shadow:none;}
 .btn-sm{padding:9px 18px;font-size:12.5px;width:auto;border-radius:10px;}
 .btn-row{display:flex;gap:10px;}.btn-row .btn{margin:0;}
-
 .inp-g{margin-bottom:16px;}
-.inp-l{font-size:10.5px;color:rgba(170,150,220,.55);margin-bottom:7px;letter-spacing:2.5px;text-transform:uppercase;}
-.inp{width:100%;padding:13px 16px;background:rgba(255,255,255,.05);border:1px solid rgba(167,139,250,.13);
-  border-radius:12px;color:#F0EEFF;font-size:15px;font-family:'Noto Sans KR',sans-serif;
-  outline:none;transition:all .2s;}
-.inp:focus{border-color:rgba(167,139,250,.45);background:rgba(255,255,255,.075);}
-.inp::placeholder{color:rgba(180,160,255,.25);}
+.inp-l{font-size:10.5px;color:rgba(160,140,210,.55);margin-bottom:7px;letter-spacing:2.5px;text-transform:uppercase;}
+.inp{width:100%;padding:13px 16px;background:rgba(255,255,255,.045);border:1px solid rgba(139,92,246,.15);
+  border-radius:12px;color:#EDE9FF;font-size:15px;font-family:'Noto Sans KR',sans-serif;outline:none;transition:all .2s;}
+.inp:focus{border-color:rgba(139,92,246,.5);background:rgba(255,255,255,.07);}
+.inp::placeholder{color:rgba(160,140,220,.22);}
 .g-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
-.g-btn{padding:11px 6px;border-radius:10px;border:1px solid rgba(255,255,255,.09);
-  background:rgba(255,255,255,.04);color:rgba(200,185,255,.7);
-  font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;font-family:'Noto Sans KR',sans-serif;}
-.g-btn.sel,.g-btn:hover{background:rgba(109,33,176,.22);border-color:rgba(167,139,250,.45);color:#DDD6FE;}
-
+.g-btn{padding:11px 6px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035);
+  color:rgba(192,178,255,.65);font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;font-family:'Noto Sans KR',sans-serif;}
+.g-btn.sel,.g-btn:hover{background:rgba(91,33,182,.22);border-color:rgba(139,92,246,.45);color:#DDD6FE;}
 .segs{display:flex;gap:4px;margin-bottom:6px;}
-.seg{height:3px;flex:1;background:rgba(255,255,255,.07);border-radius:99px;overflow:hidden;}
-.seg-f{height:100%;background:linear-gradient(90deg,#6B21A8,#A78BFA);border-radius:99px;transition:width .35s;}
+.seg{height:3px;flex:1;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden;}
+.seg-f{height:100%;background:linear-gradient(90deg,#5B21B6,#8B5CF6);border-radius:99px;transition:width .35s;}
 .prog-meta{display:flex;justify-content:space-between;margin-bottom:20px;}
-.prog-meta span{font-size:10px;color:rgba(160,140,220,.5);letter-spacing:1px;}
+.prog-meta span{font-size:10px;color:rgba(148,128,200,.5);letter-spacing:1px;}
 .sec-tag{display:inline-flex;align-items:center;gap:7px;padding:5px 13px;border-radius:99px;
-  font-size:10.5px;font-weight:600;letter-spacing:1.5px;
-  background:rgba(109,33,176,.14);border:1px solid rgba(167,139,250,.18);color:#A78BFA;
+  font-size:10.5px;font-weight:600;letter-spacing:1.5px;background:rgba(91,33,182,.14);border:1px solid rgba(139,92,246,.2);color:#A78BFA;
   margin-bottom:18px;font-family:'Gmarket Sans',sans-serif;}
 .q-text{font-size:18px;font-weight:500;line-height:1.7;color:#EDE9FF;margin-bottom:28px;min-height:54px;}
-
 .scale{display:flex;gap:6px;}
 .sc-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;}
-.sc-btn{width:100%;padding:10px 4px;border-radius:13px;border:1px solid rgba(255,255,255,.1);
-  background:rgba(255,255,255,.04);cursor:pointer;transition:all .17s;
-  display:flex;flex-direction:column;align-items:center;gap:4px;}
+.sc-btn{width:100%;padding:10px 4px;border-radius:13px;border:1px solid rgba(255,255,255,.09);
+  background:rgba(255,255,255,.035);cursor:pointer;transition:all .17s;display:flex;flex-direction:column;align-items:center;gap:4px;}
 .sc-btn:hover{transform:scale(1.05);}
 .sc-em{font-size:20px;line-height:1;}
-.sc-txt{font-size:9.5px;color:rgba(170,150,220,.55);text-align:center;line-height:1.35;font-family:'Noto Sans KR',sans-serif;white-space:pre-line;}
+.sc-txt{font-size:9.5px;color:rgba(160,140,210,.5);text-align:center;line-height:1.35;font-family:'Noto Sans KR',sans-serif;white-space:pre-line;}
 .sc-btn[dv="1"]:hover,.sc-btn[dv="1"].a{background:rgba(239,68,68,.17);border-color:#EF4444;}
 .sc-btn[dv="1"].a .sc-txt{color:#FCA5A5;}
 .sc-btn[dv="2"]:hover,.sc-btn[dv="2"].a{background:rgba(249,115,22,.17);border-color:#F97316;}
@@ -521,163 +445,138 @@ h2{font-family:'Gmarket Sans',sans-serif;font-size:20px;font-weight:700;color:#E
 .sc-btn[dv="3"].a .sc-txt{color:#FDE047;}
 .sc-btn[dv="4"]:hover,.sc-btn[dv="4"].a{background:rgba(34,197,94,.17);border-color:#22C55E;}
 .sc-btn[dv="4"].a .sc-txt{color:#86EFAC;}
-.sc-btn[dv="5"]:hover,.sc-btn[dv="5"].a{background:rgba(109,33,176,.25);border-color:#7C3AED;}
+.sc-btn[dv="5"]:hover,.sc-btn[dv="5"].a{background:rgba(91,33,182,.25);border-color:#7C3AED;}
 .sc-btn[dv="5"].a .sc-txt{color:#C4B5FD;}
-
 .ab-opts{display:flex;flex-direction:column;gap:10px;margin-bottom:8px;}
-.ab-opt{padding:16px 20px;border-radius:14px;border:1px solid rgba(167,139,250,.15);
-  background:rgba(255,255,255,.035);cursor:pointer;transition:all .2s;text-align:left;}
-.ab-opt:hover,.ab-opt.a{background:rgba(109,33,176,.14);border-color:rgba(167,139,250,.38);}
-.ab-label{font-size:10px;color:rgba(167,139,250,.6);letter-spacing:2px;margin-bottom:4px;font-family:'Gmarket Sans',sans-serif;}
+.ab-opt{padding:16px 20px;border-radius:14px;border:1px solid rgba(139,92,246,.15);background:rgba(255,255,255,.03);cursor:pointer;transition:all .2s;text-align:left;}
+.ab-opt:hover,.ab-opt.a{background:rgba(91,33,182,.14);border-color:rgba(139,92,246,.38);}
+.ab-label{font-size:10px;color:rgba(139,92,246,.6);letter-spacing:2px;margin-bottom:4px;font-family:'Gmarket Sans',sans-serif;}
 .ab-text{font-size:14.5px;color:#E0DAFF;font-weight:500;}
-
-.r-hero{text-align:center;padding:16px 0 24px;border-bottom:1px solid rgba(167,139,250,.1);margin-bottom:20px;}
+.r-hero{text-align:center;padding:16px 0 24px;border-bottom:1px solid rgba(139,92,246,.1);margin-bottom:20px;}
 .r-code{font-family:'Gmarket Sans',sans-serif;font-size:52px;font-weight:700;letter-spacing:6px;
-  background:linear-gradient(130deg,#DDD6FE,#A78BFA,#E879F9);-webkit-background-clip:text;
-  -webkit-text-fill-color:transparent;margin-bottom:8px;}
-.pill{display:inline-block;padding:5px 15px;border-radius:99px;font-size:12px;font-weight:700;
-  background:rgba(109,33,176,.18);border:1px solid rgba(167,139,250,.28);color:#C4B5FD;margin:3px;}
+  background:linear-gradient(130deg,#E2D9FE,#A78BFA,#C084FC);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px;}
+.pill{display:inline-block;padding:5px 15px;border-radius:99px;font-size:12px;font-weight:700;background:rgba(91,33,182,.18);border:1px solid rgba(139,92,246,.3);color:#C4B5FD;margin:3px;}
 .sec-b{margin-bottom:20px;}
-.sec-t{font-size:9.5px;letter-spacing:3px;color:rgba(155,140,210,.5);font-family:'Gmarket Sans',sans-serif;margin-bottom:12px;text-transform:uppercase;}
+.sec-t{font-size:10px;letter-spacing:2.5px;color:rgba(167,139,250,.7);font-family:'Gmarket Sans',sans-serif;margin-bottom:12px;text-transform:uppercase;font-weight:600;}
 .tags{display:flex;flex-wrap:wrap;gap:7px;}
-.tag{padding:6px 13px;border-radius:99px;font-size:12px;font-weight:500;
-  border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.045);color:rgba(215,205,255,.85);}
-.tag.hi{background:rgba(109,33,176,.2);border-color:rgba(167,139,250,.32);color:#C4B5FD;}
-.adv{background:rgba(49,46,129,.18);border:1px solid rgba(99,102,241,.2);
-  border-radius:14px;padding:18px 20px;font-size:13px;line-height:1.95;color:rgba(195,188,255,.82);}
+.tag{padding:6px 14px;border-radius:99px;font-size:12.5px;font-weight:500;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.055);color:#DDD6FE;}
+.tag.hi{background:rgba(91,33,182,.25);border-color:rgba(139,92,246,.45);color:#DDD6FE;font-weight:600;}
+.adv{background:rgba(30,27,90,.5);border:1px solid rgba(99,102,241,.25);border-radius:14px;padding:18px 20px;font-size:13px;line-height:2;color:#C7D2FE;}
 .adv strong{color:#A5B4FC;}
-.div{height:1px;background:rgba(167,139,250,.08);margin:18px 0;}
-
+.div{height:1px;background:rgba(139,92,246,.1);margin:20px 0;}
+.strength-tag{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;font-size:12px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.22);color:#6EE7B7;margin:3px;}
 .tabs{display:flex;gap:4px;margin-bottom:24px;background:rgba(255,255,255,.04);border-radius:12px;padding:4px;}
-.tab{flex:1;padding:10px;font-size:13px;border-radius:9px;border:none;cursor:pointer;
-  font-family:'Gmarket Sans',sans-serif;font-weight:600;color:rgba(200,185,255,.55);background:transparent;transition:all .2s;}
-.tab.on{background:rgba(109,33,176,.45);color:#DDD6FE;}
-
+.tab{flex:1;padding:10px;font-size:13px;border-radius:9px;border:none;cursor:pointer;font-family:'Gmarket Sans',sans-serif;font-weight:600;color:rgba(192,178,255,.5);background:transparent;transition:all .2s;}
+.tab.on{background:rgba(91,33,182,.45);color:#DDD6FE;}
 .srow-in{display:flex;align-items:center;padding:12px;gap:12px;border-bottom:1px solid rgba(255,255,255,.04);}
-.code-badge{font-family:'Gmarket Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;
-  padding:3px 10px;border-radius:6px;background:rgba(109,33,176,.15);border:1px solid rgba(167,139,250,.2);color:#A78BFA;}
+.code-badge{font-family:'Gmarket Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:6px;background:rgba(91,33,182,.15);border:1px solid rgba(139,92,246,.2);color:#A78BFA;}
 .status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
 .status-done{background:#34D399;box-shadow:0 0 6px rgba(52,211,153,.5);}
 .status-wait{background:#FCD34D;box-shadow:0 0 6px rgba(252,211,77,.4);}
-
-.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);
-  padding:12px 24px;border-radius:12px;background:rgba(109,33,176,.92);border:1px solid rgba(167,139,250,.3);
-  color:#DDD6FE;font-size:13px;font-weight:600;backdrop-filter:blur(12px);
-  animation:toastIn .3s ease;z-index:9999;white-space:nowrap;}
+.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);padding:12px 24px;border-radius:12px;background:rgba(91,33,182,.95);border:1px solid rgba(139,92,246,.35);color:#DDD6FE;font-size:13px;font-weight:600;backdrop-filter:blur(12px);animation:toastIn .3s ease;z-index:9999;white-space:nowrap;}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(16px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
-@keyframes fu{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
-.fu{animation:fu .4s ease;}
-@keyframes fl{from{opacity:0;transform:translateX(16px);}to{opacity:1;transform:translateX(0);}}
-.fl{animation:fl .25s ease;}
-.hint{font-size:10px;color:rgba(160,140,220,.4);line-height:1.7;text-align:center;margin-top:12px;}
-
-/* ── 강점 태그 ── */
-.strength-tag{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;font-size:12px;
-  background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);color:#6EE7B7;margin:3px;}
-
-/* ── PDF / PRINT ── */
+.hint{font-size:10px;color:rgba(148,128,200,.4);line-height:1.7;text-align:center;margin-top:12px;}
+/* 자동저장 배너 */
+.autosave-banner{padding:10px 16px;border-radius:12px;background:rgba(234,179,8,.07);border:1px solid rgba(234,179,8,.2);font-size:12px;color:rgba(253,211,77,.8);text-align:center;margin-bottom:16px;}
+/* AI 코멘트 */
+.ai-box{background:linear-gradient(135deg,rgba(16,185,129,.06),rgba(91,33,182,.06));border:1px solid rgba(52,211,153,.2);border-radius:16px;padding:18px 20px;}
+.ai-loading{display:flex;align-items:center;gap:10px;color:rgba(110,231,183,.7);font-size:13px;}
+.ai-dot{width:8px;height:8px;border-radius:50%;background:#6EE7B7;animation:pulse 1s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+/* 총평박스 */
+.summary-box{background:rgba(52,211,153,.05);border:1px solid rgba(52,211,153,.18);border-radius:16px;padding:18px 20px;}
+/* PDF */
 @media print{
-  @page{size:A4;margin:15mm 18mm;}
+  @page{size:A4;margin:12mm 16mm;}
   .no-print{display:none!important;}
   body,html{background:white!important;}
-  .root{background:white!important;padding:0;display:block;}
-  .card,.card.wide{background:white!important;border:none!important;box-shadow:none!important;
-    padding:0!important;max-width:100%!important;border-radius:0!important;color:#1a1529!important;}
-
-  /* 프린트 헤더 */
-  .print-header{display:flex!important;align-items:center;justify-content:space-between;
-    border-bottom:3px solid #7C3AED;padding-bottom:12px;margin-bottom:20px;}
-  .print-header-logo{font-family:'Gmarket Sans',sans-serif;font-size:22px;font-weight:700;color:#7C3AED;}
-  .print-header-info{font-size:10px;color:#888;text-align:right;line-height:1.8;}
-
+  .root,.root.pub{background:white!important;padding:0;display:block;}
+  .card,.card.wide,.card.pub-card{background:white!important;border:none!important;box-shadow:none!important;padding:0!important;max-width:100%!important;border-radius:0!important;}
+  .print-header{display:flex!important;align-items:center;justify-content:space-between;background:#4C1D95;padding:14px 20px;margin-bottom:18px;border-radius:8px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .print-header-logo{font-family:'Gmarket Sans',sans-serif;font-size:20px;font-weight:700;color:white!important;}
+  .print-header-sub{font-size:10px;color:rgba(255,255,255,.7);letter-spacing:2px;margin-top:2px;}
+  .print-header-info{font-size:10px;color:rgba(255,255,255,.85);text-align:right;line-height:1.9;}
   h1,h2{color:#1a1529!important;-webkit-text-fill-color:#1a1529!important;}
-  h2{font-size:14px!important;border-bottom:1px solid #e0d8ff;padding-bottom:6px;margin-bottom:10px;}
-  .r-code{font-size:36px!important;-webkit-text-fill-color:#7C3AED!important;color:#7C3AED!important;}
-  .muted,.sec-t{color:#666!important;}
-  .tag,.pill,.badge,.strength-tag{background:#f0ebff!important;border-color:#c4b5fd!important;color:#5b21b6!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  .tag.hi{background:#ede9fe!important;color:#4c1d95!important;}
-  .adv{background:#f5f0ff!important;border:1px solid #c4b5fd!important;color:#3b0764!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  .adv strong{color:#5b21b6!important;}
-  .div{background:#e0d8ff!important;}
+  p,span,div{color:#2d1b69!important;}
+  .r-hero{background:#F5F0FF!important;border-radius:10px!important;padding:16px!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .r-code{font-size:40px!important;-webkit-text-fill-color:#6D28D9!important;color:#6D28D9!important;}
+  .sec-t{color:#7C3AED!important;border-bottom:1px solid #E9D5FF;padding-bottom:4px;}
+  .tag,.pill,.badge{background:#EDE9FE!important;border:1px solid #C4B5FD!important;color:#4C1D95!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .tag.hi{background:#DDD6FE!important;color:#3B0764!important;font-weight:700!important;}
+  .adv{background:#F5F0FF!important;border:2px solid #C4B5FD!important;color:#2d1b69!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .adv strong,.adv div{color:#5B21B6!important;}
+  .div{background:#DDD6FE!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .strength-tag{background:#D1FAE5!important;border-color:#6EE7B7!important;color:#065F46!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .student-card{background:#F5F0FF!important;border:2px solid #7C3AED!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .type-desc-box{background:#FAF5FF!important;border-left:4px solid #7C3AED!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .type-desc-text{color:#2d1b69!important;}
+  .ai-box{background:#F0FDF9!important;border:2px solid #6EE7B7!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .summary-box{background:#F0FDF4!important;border:2px solid #6EE7B7!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .logo-name .p{color:#7C3AED!important;-webkit-text-fill-color:#7C3AED!important;}
   .logo-name .t{color:#64748B!important;-webkit-text-fill-color:#64748B!important;}
-  .logo-tag{color:#888!important;}
-  .logo-box{background:linear-gradient(140deg,#6B21A8,#9333EA)!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-
-  /* 바 차트 */
-  .bar-fill{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  .radar-svg polygon[fill]{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-
+  .logo-box{background:linear-gradient(140deg,#5B21B6,#7C3AED)!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .print-section{page-break-inside:avoid;}
-  .print-page-break{page-break-before:always;}
-
-  /* 학생 카드 */
-  .student-card{background:#f5f0ff!important;border:2px solid #7C3AED!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  .student-name{color:#3b0764!important;}
-  .student-meta{color:#555!important;}
-
-  /* 타입 설명 박스 */
-  .type-desc-box{background:#faf7ff!important;border-left:4px solid #7C3AED!important;padding:12px 16px!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  .type-desc-text{color:#3b0764!important;font-size:12px!important;}
-
-  /* MBTI 박스 */
-  .mbti-box{background:#ede9fe!important;border:1px solid #7C3AED!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  .mbti-type{color:#5b21b6!important;-webkit-text-fill-color:#5b21b6!important;}
-
-  /* 섹션 라벨 */
-  .sec-label{background:#7C3AED!important;color:white!important;padding:3px 10px!important;border-radius:4px!important;font-size:10px!important;font-weight:700!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .bar-track{background:#EDE9FE!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .mbti-box{background:#EDE9FE!important;border:2px solid #7C3AED!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .mbti-type{color:#4C1D95!important;-webkit-text-fill-color:#4C1D95!important;}
 }
 @media(max-width:500px){
   .card{padding:26px 16px;border-radius:20px;}
   h1{font-size:24px;}.q-text{font-size:16px;}
   .scale{gap:4px;}.sc-txt{font-size:8.5px;}
+  .radar-grid{grid-template-columns:1fr!important;}
 }
+.radar-wrap{overflow:hidden;width:100%;display:flex;justify-content:center;}
 `;
 
 const SECS=[
   {key:"riasec",label:"흥미 유형",sub:"Holland RIASEC",icon:"🎯",qs:RQ,type:"likert"},
   {key:"mi",label:"다중지능",sub:"Gardner MI",icon:"🧩",qs:MQ,type:"likert"},
-  {key:"tendency",label:"계열 성향",sub:"Academic Tendency",icon:"📐",qs:TQ,type:"likert"},
-  {key:"values",label:"직업 가치관",sub:"Career Values",icon:"💎",qs:VQ,type:"likert"},
-  {key:"mbti_test",label:"성격 유형",sub:"MBTI",icon:"🪪",qs:BQ,type:"ab"},
+  {key:"tend",label:"계열 성향",sub:"Academic Tendency",icon:"📐",qs:TQ,type:"likert"},
+  {key:"value",label:"직업 가치관",sub:"Work Values",icon:"💎",qs:VQ,type:"likert"},
+  {key:"mbti",label:"MBTI 성격 유형",sub:"Myers-Briggs",icon:"🧠",qs:[],type:"mbti"},
 ];
-const SCALE=[
-  {v:1,e:"😑",t:"전혀\n아니다"},{v:2,e:"🙁",t:"아닌\n편이다"},{v:3,e:"😐",t:"보통\n이다"},
-  {v:4,e:"🙂",t:"그런\n편이다"},{v:5,e:"😄",t:"매우\n그렇다"},
-];
-const MBTI_TYPES=["INTJ","INTP","ENTJ","ENTP","INFJ","INFP","ENFJ","ENFP","ISTJ","ISFJ","ESTJ","ESFJ","ISTP","ISFP","ESTP","ESFP"];
 
-// ═══════════════════════════════════════════════════════════════
-//  MAIN APP
-// ═══════════════════════════════════════════════════════════════
-function App() {
+// ═══════════════════════════════
+//  APP
+// ═══════════════════════════════
+function App(){
   const [view,setView]=useState("loading");
-  const [token,setToken]=useState(null);
+  const [logo,setLogo]=useState(null);
+  const [token,setToken]=useState("");
   const [tokenData,setTokenData]=useState(null);
   const [info,setInfo]=useState({name:"",grade:"",school:"",studentPhone:"",parentPhone:""});
-  const [answers,setAnswers]=useState({});
   const [secIdx,setSecIdx]=useState(0);
   const [qIdx,setQIdx]=useState(0);
-  const [mbtiMode,setMbtiMode]=useState(null);
+  const [answers,setAnswers]=useState({});
+  const [mbtiMode,setMbtiMode]=useState("none");
   const [mbtiKnown,setMbtiKnown]=useState("");
   const [animKey,setAnimKey]=useState(0);
+  const [toast,setToast]=useState("");
   const [adminAuth,setAdminAuth]=useState(false);
   const [adminPw,setAdminPw]=useState("");
   const [adminErr,setAdminErr]=useState(false);
   const [adminTab,setAdminTab]=useState("subs");
-  const [links,setLinks]=useState([]);
   const [subs,setSubs]=useState([]);
   const [selSub,setSelSub]=useState(null);
-  const [logo,setLogo]=useState(null);
-  const [toast,setToast]=useState("");
+  const [loadingAdmin,setLoadingAdmin]=useState(false);
+  const [tokens,setTokens]=useState([]);
   const [newLabel,setNewLabel]=useState("");
+  const [settingsData,setSettingsData]=useState(null);
   const logoRef=useRef();
   const toastRef=useRef();
+  const activeSecs=mbtiMode==="test"?SECS:SECS.filter(s=>s.key!=="mbti_test");
 
   const showToast=msg=>{setToast(msg);clearTimeout(toastRef.current);toastRef.current=setTimeout(()=>setToast(""),2600);};
-  const activeSecs=mbtiMode==="test"?SECS:SECS.filter(s=>s.key!=="mbti_test");
-  const curSec=activeSecs[secIdx];
-  const curQ=curSec?.qs[qIdx];
+  const resultUrl=t=>`${window.location.origin}${window.location.pathname}#r/${encodeURIComponent(t)}`;
+  const copyLink=async url=>{try{await navigator.clipboard.writeText(url);showToast("✅ 링크 복사됨!");}catch{showToast("링크: "+url);}};
+  const adminLogin=()=>{if(adminPw===APW){setAdminAuth(true);loadAdmin();}else{setAdminErr(true);}};
+
+  // ── 자동저장 ──
+  const autoSave=useCallback(async(ans,si,qi,inf,mm,mk)=>{
+    if(!token)return;
+    await S.set(K.progress(token),{answers:ans,secIdx:si,qIdx:qi,info:inf,mbtiMode:mm,mbtiKnown:mk,savedAt:new Date().toISOString()});
+  },[token]);
 
   useEffect(()=>{
     (async()=>{
@@ -690,7 +589,7 @@ function App() {
         const t=decodeURIComponent(hash.slice(2));
         const d=await S.get(K.link(t));
         if(d?.submission){setSelSub(d.submission);setView("result_pub");}
-        else setView("home");
+        else setView("result_notfound");
         return;
       }
       const t=decodeURIComponent(hash);
@@ -698,21 +597,88 @@ function App() {
       if(!d){setView("home");return;}
       setToken(t);setTokenData(d);
       if(d.status==="used"){setSelSub(d.submission);setView("already");}
-      else setView("start");
+      else {
+        // 이어하기: 저장된 진행상황 확인
+        const prog=await S.get(K.progress(t));
+        if(prog&&prog.answers&&Object.keys(prog.answers).length>0){
+          setAnswers(prog.answers);
+          setSecIdx(prog.secIdx||0);
+          setQIdx(prog.qIdx||0);
+          setInfo(prog.info||{name:"",grade:"",school:"",studentPhone:"",parentPhone:""});
+          setMbtiMode(prog.mbtiMode||"none");
+          setMbtiKnown(prog.mbtiKnown||"");
+          setView("resume"); // 이어하기 확인 화면
+        } else {
+          setView("start");
+        }
+      }
     })();
   },[]);
 
-  function advance(newAns){
-    if(qIdx<curSec.qs.length-1){setQIdx(q=>q+1);}
-    else if(secIdx<activeSecs.length-1){setSecIdx(s=>s+1);setQIdx(0);}
-    else doSubmit(newAns);
+  async function loadAdmin(){
+    setLoadingAdmin(true);
+    const ll=await S.get(K.links())||[];
+    const loaded=[];
+    for(const t of ll){ const d=await S.get(K.link(t)); if(d)loaded.push(d); }
+    setSubs(loaded.filter(d=>d.status==="used"));
+    setTokens(loaded.filter(d=>d.status!=="used"));
+    setLoadingAdmin(false);
   }
+
+  const totalQ=()=>{
+    const coreQ=RQ.length+MQ.length+TQ.length+VQ.length;
+    return mbtiMode==="test"?coreQ+BQ.length:coreQ;
+  };
+  const doneQ=()=>{
+    let d=0;
+    for(let i=0;i<secIdx;i++){
+      const s=activeSecs[i];
+      if(s.type==="likert")d+=s.qs.length;
+      else if(s.type==="mbti")d+=BQ.length;
+    }
+    d+=qIdx;
+    return d;
+  };
+
+  function advance(newAns){
+    const curSec=activeSecs[secIdx];
+    const qs=curSec.type==="mbti"?BQ:curSec.qs;
+    const nextQ=qIdx+1;
+    if(nextQ<qs.length){
+      setQIdx(nextQ);
+      autoSave(newAns,secIdx,nextQ,info,mbtiMode,mbtiKnown);
+    } else if(secIdx<activeSecs.length-1){
+      const nextSec=secIdx+1;
+      setSecIdx(nextSec);setQIdx(0);
+      autoSave(newAns,nextSec,0,info,mbtiMode,mbtiKnown);
+    } else {
+      doSubmit(newAns);
+    }
+  }
+
+  function goBack(){
+    if(qIdx>0){setQIdx(q=>q-1);return;}
+    if(secIdx>0){
+      const prevSec=activeSecs[secIdx-1];
+      const qs=prevSec.type==="mbti"?BQ:prevSec.qs;
+      setSecIdx(s=>s-1);setQIdx(qs.length-1);
+    }
+  }
+
+  function goRestart(){
+    setAnswers({});setSecIdx(0);setQIdx(0);
+    if(token)S.del(K.progress(token));
+  }
+
   function handleLikert(score){
+    const curSec=activeSecs[secIdx];
+    const curQ=curSec.qs[qIdx];
     const nAns={...answers,[curQ.id]:score};
     setAnswers(nAns);setAnimKey(k=>k+1);
     setTimeout(()=>advance(nAns),260);
   }
   function handleAB(ch){
+    const curQ=BQ[qIdx];
     const nAns={...answers,[curQ.id]:ch};
     setAnswers(nAns);setAnimKey(k=>k+1);
     setTimeout(()=>advance(nAns),260);
@@ -725,283 +691,227 @@ function App() {
     const record={token:id,label:info.name||tokenData?.label||id,status:"used",
       createdAt:tokenData?.createdAt||new Date().toLocaleString("ko-KR"),submission};
     await S.set(K.link(id),record);
-    if(!token){
-      const ll=await S.get(K.links())||[];
-      if(!ll.includes(id))ll.unshift(id);
-      await S.set(K.links(),ll);
-    }
-    setView("done");
+    if(!token){const ll=await S.get(K.links())||[];if(!ll.includes(id))ll.unshift(id);await S.set(K.links(),ll);}
+    await S.del(K.progress(id)); // 진행중 데이터 삭제
+    setSelSub(submission);setView("done");
   }
 
-  async function adminLogin(){
-    if(adminPw===APW){setAdminAuth(true);setAdminErr(false);await loadAdmin();}
-    else setAdminErr(true);
-  }
-  async function loadAdmin(){
-    const ll=await S.get(K.links())||[];
-    const recs=[];
-    for(const t of ll){const d=await S.get(K.link(t));if(d)recs.push(d);}
-    recs.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
-    setLinks(recs);
-    setSubs(recs.filter(d=>d.status==="used"&&d.submission).map(d=>d.submission));
-  }
-  async function createLink(){
+  async function createToken(){
+    if(!newLabel.trim())return;
     const t=mkCode();
-    const d={token:t,label:newLabel||"(이름 미입력)",status:"pending",createdAt:new Date().toLocaleString("ko-KR"),submission:null};
+    const d={token:t,label:newLabel.trim(),status:"ready",createdAt:new Date().toLocaleString("ko-KR")};
     await S.set(K.link(t),d);
-    const ll=await S.get(K.links())||[];
-    ll.unshift(t);await S.set(K.links(),ll);
-    setNewLabel("");await loadAdmin();
-    showToast("✅ 링크가 생성되었습니다!");
+    const ll=await S.get(K.links())||[];ll.unshift(t);await S.set(K.links(),ll);
+    setNewLabel("");setTokens(prev=>[d,...prev]);showToast("✅ 링크 생성됨!");
   }
-  async function deleteRecord(t){
+
+  async function deleteToken(t){
     await S.del(K.link(t));
-    const ll=await S.get(K.links())||[];
-    await S.set(K.links(),ll.filter(k=>k!==t));
-    await loadAdmin();
-    showToast("🗑 삭제되었습니다.");
+    const ll=await S.get(K.links())||[];await S.set(K.links(),ll.filter(x=>x!==t));
+    setTokens(prev=>prev.filter(d=>d.token!==t));
   }
+
   async function uploadLogo(e){
-    const file=e.target.files[0];if(!file)return;
+    const file=e.target.files?.[0];if(!file)return;
     const reader=new FileReader();
-    reader.onload=async ev=>{
-      const d=ev.target.result;setLogo(d);
-      const cfg=await S.get(K.cfg())||{};cfg.logo=d;
-      await S.set(K.cfg(),cfg);showToast("🖼 로고가 저장되었습니다!");
+    reader.onload=async(ev)=>{
+      const b64=ev.target.result;setLogo(b64);
+      const cfg=await S.get(K.cfg())||{};cfg.logo=b64;await S.set(K.cfg(),cfg);
+      showToast("✅ 로고 저장됨!");
     };
     reader.readAsDataURL(file);
   }
 
-  const baseUrl=()=>{try{const u=new URL(window.location.href);u.hash="";return u.toString();}catch{return "";}}
-  const testUrl=t=>`${baseUrl()}#${encodeURIComponent(t)}`;
-  const resultUrl=t=>`${baseUrl()}#r/${encodeURIComponent(t)}`;
-  const copyLink=(url)=>{try{navigator.clipboard.writeText(url);showToast("🔗 링크가 복사되었습니다!");}catch{showToast(url);}};
-
   const LogoRow=()=>(
     <div className="logo-row">
-      <div className="logo-box">{logo?<img src={logo} alt="logo"/>:"✦"}</div>
-      <div>
+      <div className="logo-box" style={{background:logo?"transparent":"",boxShadow:logo?"none":""}}>
+        {logo?<img src={logo} alt="logo"/>:"✦"}
+      </div>
+      {!logo&&<div>
         <div className="logo-name"><span className="p">PIL</span><span className="t">TOP</span></div>
         <div className="logo-tag">Career Compass</div>
-      </div>
+      </div>}
     </div>
   );
 
-  const SegProgress=()=>{
-    const total=activeSecs.reduce((s,sec)=>s+sec.qs.length,0);
-    const done=activeSecs.slice(0,secIdx).reduce((s,sec)=>s+sec.qs.length,0)+qIdx;
+  // ── 검사 진행 화면 ──
+  const QuizView=()=>{
+    const curSec=activeSecs[secIdx];
+    const isMBTI=curSec.type==="mbti";
+    const curQ=isMBTI?BQ[qIdx]:curSec.qs[qIdx];
+    const done=doneQ(), total=totalQ();
+    const hasPrev=secIdx>0||qIdx>0;
+
     return(
-      <div>
-        <div className="segs">
-          {activeSecs.map((s,i)=>{
-            const fill=i<secIdx?100:i===secIdx?Math.round((qIdx/s.qs.length)*100):0;
-            return<div key={s.key} className="seg"><div className="seg-f" style={{width:`${fill}%`}}/></div>;
-          })}
-        </div>
+      <div className="root"><div className="card">
+        <style>{CSS}</style>
+        {/* 진행바 */}
+        <div className="segs">{activeSecs.map((s,i)=>{
+          const qs=s.type==="mbti"?BQ:s.qs;
+          const start=activeSecs.slice(0,i).reduce((a,x)=>a+(x.type==="mbti"?BQ.length:x.qs.length),0);
+          const fill=i<secIdx?100:i===secIdx?Math.round((qIdx/qs.length)*100):0;
+          return<div key={s.key} className="seg"><div className="seg-f" style={{width:`${fill}%`}}/></div>;
+        })}</div>
         <div className="prog-meta">
-          <span>{curSec?.icon} {curSec?.label} · {curSec?.sub}</span>
+          <span>{curSec.icon} {curSec.label} · {curSec.sub}</span>
           <span>{done+1} / {total}</span>
         </div>
-      </div>
+        {!isMBTI?(
+          <div key={animKey} className="fl">
+            <div className="q-text">{curQ.t}</div>
+            <div className="scale">
+              {[{v:1,em:"😟",l:"전혀\n아니다"},{v:2,em:"🙁",l:"아니다"},{v:3,em:"😐",l:"보통"},{v:4,em:"🙂",l:"그렇다"},{v:5,em:"😄",l:"매우\n그렇다"}].map(o=>(
+                <div key={o.v} className="sc-item">
+                  <button className={`sc-btn${answers[curQ.id]===o.v?" a":""}`} dv={String(o.v)} onClick={()=>handleLikert(o.v)}>
+                    <span className="sc-em">{o.em}</span>
+                    <span className="sc-txt">{o.l}</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ):(
+          <div key={animKey} className="fl">
+            <div className="sec-tag">🧠 성격 유형</div>
+            <div className="q-text">{curQ.t}</div>
+            <div className="ab-opts">
+              {[{ch:"A",txt:curQ.a},{ch:"B",txt:curQ.b}].map(o=>(
+                <button key={o.ch} className={`ab-opt${answers[curQ.id]===o.ch?" a":""}`} onClick={()=>handleAB(o.ch)}>
+                  <div className="ab-label">{o.ch}</div>
+                  <div className="ab-text">{o.txt}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div style={{display:"flex",gap:8,marginTop:16}}>
+          {hasPrev&&<button className="btn btn-g btn-sm" onClick={goBack}>← 이전</button>}
+          <button className="btn btn-g btn-sm" style={{marginLeft:"auto"}} onClick={()=>{if(window.confirm("처음부터 다시 시작할까요?"))goRestart();}}>↺ 처음부터</button>
+        </div>
+        <p className="hint">자동 저장 중 · 나중에 이어서 할 수 있어요</p>
+      </div></div>
     );
   };
 
-  return (
+  return(
     <>
     <style>{CSS}</style>
     {toast&&<div className="toast no-print">{toast}</div>}
 
     {view==="loading"&&<div className="root"><div className="card fu"><LogoRow/><p className="muted">불러오는 중...</p></div></div>}
 
-    {view==="home"&&(
-      <div className="root"><div className="card fu">
-        <LogoRow/>
-        <h1>나의 진로를<br/>발견하는 여정</h1>
-        <p className="muted">선생님께 받은 링크를 클릭하면<br/>바로 검사가 시작됩니다.</p>
-        {!sbReady&&<div style={{padding:"10px 14px",borderRadius:10,background:"rgba(245,158,11,.08)",border:"1px solid rgba(245,158,11,.2)",fontSize:12,color:"rgba(253,211,77,.7)",marginBottom:16}}>⚠️ Supabase 미연결 — 로컬 저장 모드</div>}
-        <div style={{marginTop:20,textAlign:"center"}}>
-          <button className="btn-g btn btn-sm" style={{margin:"0 auto"}}
-            onClick={()=>{window.location.hash="admin";setView("admin");}}>🔐 관리자</button>
-        </div>
-      </div></div>
-    )}
+    {view==="home"&&<div className="root"><div className="card fu">
+      <LogoRow/>
+      <h1>나의 진로를<br/>발견하는 여정</h1>
+      <p className="muted">선생님께 받은 링크를 클릭하면<br/>바로 검사가 시작됩니다.</p>
+      <div style={{marginTop:20,textAlign:"center"}}>
+        <button className="btn-g btn btn-sm" style={{margin:"0 auto"}} onClick={()=>{window.location.hash="admin";setView("admin");}}>🔐 관리자</button>
+      </div>
+    </div></div>}
 
-    {view==="start"&&(
-      <div className="root"><div className="card fu">
-        <LogoRow/>
-        <div style={{textAlign:"center",marginBottom:28}}>
-          <div style={{fontSize:52,marginBottom:14}}>🎯</div>
-          <h2 style={{marginBottom:6}}>검사 코드 확인 완료</h2>
-          {tokenData?.label&&<p style={{fontSize:14,color:"rgba(190,175,255,.6)"}}>{tokenData.label}님을 위한 검사입니다</p>}
-          <div style={{marginTop:10}}><span className="code-badge">{token}</span></div>
-        </div>
-        <div className="badge-row" style={{justifyContent:"center"}}>
-          <span className="badge">📋 최대 99문항</span>
-          <span className="badge">⏱ 약 15~20분</span>
-          <span className="badge">🔬 5개 영역 분석</span>
-        </div>
-        <button className="btn" onClick={()=>setView("info")}>검사 시작하기 →</button>
-      </div></div>
-    )}
+    {view==="resume"&&<div className="root"><div className="card fu">
+      <LogoRow/>
+      <div style={{textAlign:"center",marginBottom:24}}>
+        <div style={{fontSize:48,marginBottom:12}}>💾</div>
+        <h2>이전에 하던 검사가 있어요</h2>
+        <p className="muted">이어서 계속할 수 있어요.<br/>또는 처음부터 다시 시작할 수도 있습니다.</p>
+      </div>
+      <div className="btn-row">
+        <button className="btn btn-g" onClick={()=>{goRestart();setView("start");}}>↺ 처음부터</button>
+        <button className="btn" onClick={()=>setView("quiz")}>▶ 이어하기</button>
+      </div>
+    </div></div>}
 
-    {view==="already"&&(
-      <div className="root"><div className="card fu">
-        <LogoRow/>
-        <div style={{textAlign:"center"}}>
-          <div style={{fontSize:52,marginBottom:14}}>🔒</div>
-          <h2>이미 제출된 검사입니다</h2>
-          <p className="muted">이 코드로 이미 검사가 완료되었습니다.<br/>선생님께 문의해 주세요.</p>
-          <button className="btn btn-g btn-sm" style={{margin:"0 auto"}} onClick={()=>{setView("home");window.location.hash="";}}>← 처음으로</button>
-        </div>
-      </div></div>
-    )}
+    {view==="start"&&<div className="root"><div className="card fu">
+      <LogoRow/>
+      <div style={{textAlign:"center",marginBottom:28}}>
+        <div style={{fontSize:52,marginBottom:14}}>🎯</div>
+        <h2>검사 코드 확인 완료</h2>
+        {tokenData?.label&&<p style={{fontSize:14,color:"rgba(196,181,253,.7)"}}>반갑습니다, <strong style={{color:"#C4B5FD"}}>{tokenData.label}</strong>님!</p>}
+        <div style={{marginTop:10}}><span className="code-badge">{token}</span></div>
+      </div>
+      <div className="badge-row" style={{justifyContent:"center"}}>
+        <span className="badge">📋 총 60문항</span>
+        <span className="badge">⏱ 약 10~15분</span>
+        <span className="badge">💾 자동 저장</span>
+      </div>
+      <button className="btn" onClick={()=>setView("info")}>검사 시작하기 →</button>
+    </div></div>}
 
-    {view==="info"&&(
-      <div className="root"><div className="card fu">
-        <LogoRow/>
-        <h2>기본 정보 입력</h2>
-        <p className="muted">정확한 분석을 위해 아래 정보를 모두 입력해 주세요.</p>
-        <div className="inp-g">
-          <div className="inp-l">학생 이름 *</div>
-          <input className="inp" placeholder="홍길동" value={info.name} onChange={e=>setInfo({...info,name:e.target.value})}/>
-          {tokenData?.label&&info.name&&info.name.trim()!==tokenData.label.trim()&&(
-            <div style={{marginTop:7,padding:"8px 12px",borderRadius:9,background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.25)",fontSize:12.5,color:"#FCA5A5"}}>
-              ⚠️ 학생 정보가 다릅니다. 선생님께 받은 이름을 정확히 입력해 주세요.
-            </div>
-          )}
-        </div>
-        <div className="inp-g">
-          <div className="inp-l">학교명</div>
-          <input className="inp" placeholder="예) 필탑중학교" value={info.school} onChange={e=>setInfo({...info,school:e.target.value})}/>
-        </div>
-        <div className="inp-g">
-          <div className="inp-l" style={{marginBottom:10}}>학년 *</div>
-          <div className="g-grid">
-            {["중1","중2","중3","고1","고2","고3"].map(g=>(
-              <button key={g} className={`g-btn ${info.grade===g?"sel":""}`} onClick={()=>setInfo({...info,grade:g})}>{g}</button>
-            ))}
-          </div>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <div className="inp-g" style={{marginBottom:0}}>
-            <div className="inp-l">학생 연락처</div>
-            <input className="inp" placeholder="010-0000-0000" value={info.studentPhone} onChange={e=>setInfo({...info,studentPhone:e.target.value})}/>
-          </div>
-          <div className="inp-g" style={{marginBottom:0}}>
-            <div className="inp-l">학부모 연락처</div>
-            <input className="inp" placeholder="010-0000-0000" value={info.parentPhone} onChange={e=>setInfo({...info,parentPhone:e.target.value})}/>
-          </div>
-        </div>
-        <div className="btn-row" style={{marginTop:22}}>
-          <button className="btn btn-g" onClick={()=>setView("start")}>← 이전</button>
-          <button className="btn" disabled={!info.name||!info.grade||(tokenData?.label&&info.name.trim()!==tokenData.label.trim())} onClick={()=>setView("mbti_choice")}>다음 →</button>
-        </div>
-      </div></div>
-    )}
+    {view==="already"&&<div className="root"><div className="card fu">
+      <LogoRow/>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:52,marginBottom:14}}>🔒</div>
+        <h2>이미 제출된 검사입니다</h2>
+        <p className="muted">이 코드로 이미 검사가 완료되었습니다.<br/>선생님께 문의해 주세요.</p>
+        <button className="btn btn-g btn-sm" style={{margin:"0 auto"}} onClick={()=>{setView("home");window.location.hash="";}}>← 처음으로</button>
+      </div>
+    </div></div>}
 
-    {view==="mbti_choice"&&(
-      <div className="root"><div className="card fu">
-        <LogoRow/>
-        <h2>MBTI 성격 유형</h2>
-        <p className="muted">MBTI를 알고 계신가요?</p>
-        <div className="ab-opts" style={{marginBottom:20}}>
-          {[
-            {mode:"input",l:"이미 알고 있어요",t:"✅  직접 선택할게요"},
-            {mode:"test",l:"잘 모르겠어요",t:"🧪  16문항 검사로 확인할게요"},
-            {mode:"skip",l:"건너뛰기",t:"⏭  MBTI 없이 진행할게요"},
-          ].map(({mode,l,t})=>(
-            <button key={mode} className="ab-opt" onClick={()=>{
-              setMbtiMode(mode);
-              if(mode==="input")setView("mbti_input");
-              else{setSecIdx(0);setQIdx(0);setView("test");}
-            }}>
-              <div className="ab-label">{l}</div>
-              <div className="ab-text">{t}</div>
-            </button>
-          ))}
-        </div>
-        <button className="btn btn-g" onClick={()=>setView("info")}>← 이전</button>
-      </div></div>
-    )}
+    {view==="result_notfound"&&<div className="root"><div className="card fu" style={{textAlign:"center"}}>
+      <LogoRow/>
+      <div style={{fontSize:52,marginBottom:16}}>🔍</div>
+      <h2>결과를 찾을 수 없습니다</h2>
+      <p className="muted">링크가 만료되었거나 잘못된 링크입니다.<br/>선생님께 다시 요청해 주세요.</p>
+      <button className="btn btn-g btn-sm" style={{margin:"0 auto"}} onClick={()=>{setView("home");window.location.hash="";}}>← 홈으로</button>
+    </div></div>}
 
-    {view==="mbti_input"&&(
-      <div className="root"><div className="card fu">
-        <LogoRow/>
-        <h2>MBTI 유형 선택</h2>
-        <div className="g-grid" style={{gridTemplateColumns:"repeat(4,1fr)",marginBottom:16}}>
-          {MBTI_TYPES.map(t=>(
-            <button key={t} className={`g-btn ${mbtiKnown===t?"sel":""}`} style={{padding:"12px 4px",fontSize:12}} onClick={()=>setMbtiKnown(t)}>{t}</button>
-          ))}
+    {view==="info"&&<div className="root"><div className="card fu">
+      <LogoRow/>
+      <h2>기본 정보 입력</h2>
+      <p className="muted">정확한 분석을 위해 아래 정보를 입력해 주세요.</p>
+      <div className="inp-g"><div className="inp-l">학생 이름 *</div>
+        <input className="inp" placeholder="홍길동" value={info.name} onChange={e=>setInfo({...info,name:e.target.value})}/>
+      </div>
+      <div className="inp-g"><div className="inp-l">학년 *</div>
+        <div className="g-grid">{["중1","중2","중3","고1","고2","고3"].map(g=>(
+          <button key={g} className={`g-btn${info.grade===g?" sel":""}`} onClick={()=>setInfo({...info,grade:g})}>{g}</button>
+        ))}</div>
+      </div>
+      <div className="inp-g"><div className="inp-l">학교명</div>
+        <input className="inp" placeholder="○○고등학교" value={info.school} onChange={e=>setInfo({...info,school:e.target.value})}/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div className="inp-g"><div className="inp-l">학생 연락처</div>
+          <input className="inp" placeholder="010-0000-0000" value={info.studentPhone} onChange={e=>setInfo({...info,studentPhone:e.target.value})}/>
         </div>
-        {mbtiKnown&&<div style={{marginBottom:16,padding:"10px 16px",borderRadius:10,background:"rgba(109,33,176,.12)",border:"1px solid rgba(167,139,250,.2)",fontSize:13,color:"#C4B5FD"}}>
-          {mbtiKnown} — {MBTI_DESC[mbtiKnown]}
-        </div>}
-        <div className="btn-row">
-          <button className="btn btn-g" onClick={()=>setView("mbti_choice")}>← 이전</button>
-          <button className="btn" disabled={!mbtiKnown} onClick={()=>{setSecIdx(0);setQIdx(0);setView("test");}}>시작 →</button>
+        <div className="inp-g"><div className="inp-l">학부모 연락처</div>
+          <input className="inp" placeholder="010-0000-0000" value={info.parentPhone} onChange={e=>setInfo({...info,parentPhone:e.target.value})}/>
         </div>
-      </div></div>
-    )}
+      </div>
+      <button className="btn" disabled={!info.name||!info.grade} onClick={()=>{setView("mbti_select");autoSave({},0,0,info,"none","");}}>다음 →</button>
+    </div></div>}
 
-    {view==="test"&&curSec&&curQ&&(
-      <div className="root"><div className="card">
-        <LogoRow/>
-        <SegProgress/>
-        <div key={`${secIdx}-${qIdx}-${animKey}`} className="fl">
-          <div className="sec-tag"><span>{curSec.icon}</span><span>{curSec.label} · {curSec.sub}</span></div>
-          <div className="q-text">{curQ.t}</div>
-          {curSec.type==="likert"&&(
-            <div className="scale">
-              {SCALE.map(({v,e,t})=>(
-                <div key={v} className="sc-item">
-                  <button className={`sc-btn ${answers[curQ.id]===v?"a":""}`} dv={`${v}`} onClick={()=>handleLikert(v)}>
-                    <span className="sc-em">{e}</span>
-                    <span className="sc-txt">{t}</span>
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          {curSec.type==="ab"&&(
-            <div className="ab-opts">
-              {[{ch:"A",text:curQ.a},{ch:"B",text:curQ.b}].map(({ch,text})=>(
-                <button key={ch} className={`ab-opt ${answers[curQ.id]===ch?"a":""}`} onClick={()=>handleAB(ch)}>
-                  <div className="ab-label">{ch}</div>
-                  <div className="ab-text">{text}</div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        {(qIdx>0||(secIdx>0&&qIdx===0))&&(
-          <button className="btn btn-g no-print" style={{marginTop:18,fontSize:13}}
-            onClick={()=>{
-              if(qIdx>0)setQIdx(i=>i-1);
-              else{setSecIdx(s=>s-1);setQIdx(activeSecs[secIdx-1].qs.length-1);}
-              setAnimKey(k=>k+1);
-            }}>← 이전 문항</button>
-        )}
-      </div></div>
-    )}
+    {view==="mbti_select"&&<div className="root"><div className="card fu">
+      <LogoRow/>
+      <h2>MBTI 입력 방식 선택</h2>
+      <p className="muted">MBTI를 알고 있으면 입력하고, 모르면 검사하거나 건너뛸 수 있어요.</p>
+      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
+        {[{v:"input",icon:"✏️",t:"MBTI 직접 입력",sub:"이미 알고 있어요"},{v:"test",icon:"🧩",t:"MBTI 검사하기 (12문항)",sub:"모르거나 확인하고 싶어요"},{v:"none",icon:"⏭",t:"건너뛰기",sub:"지금은 패스할게요"}].map(o=>(
+          <button key={o.v} className={`ab-opt${mbtiMode===o.v?" a":""}`} onClick={()=>setMbtiMode(o.v)}>
+            <div className="ab-label">{o.icon}</div>
+            <div className="ab-text">{o.t}</div>
+            <div style={{fontSize:11.5,color:"rgba(167,139,250,.5)",marginTop:3}}>{o.sub}</div>
+          </button>
+        ))}
+      </div>
+      {mbtiMode==="input"&&<div className="inp-g"><div className="inp-l">MBTI 유형</div>
+        <input className="inp" placeholder="ENFP" maxLength={4} value={mbtiKnown} onChange={e=>setMbtiKnown(e.target.value.toUpperCase())}/>
+      </div>}
+      <button className="btn" disabled={mbtiMode==="input"&&mbtiKnown.length!==4} onClick={()=>{setView("quiz");}}>검사 시작 →</button>
+    </div></div>}
 
-    {view==="done"&&(
-      <div className="root"><div className="card fu">
-        <LogoRow/>
-        <div style={{textAlign:"center",padding:"20px 0"}}>
-          <div style={{fontSize:64,marginBottom:16}}>🎉</div>
-          <h1 style={{fontSize:26,marginBottom:12}}>검사 완료!</h1>
-          <p className="muted">
-            <strong style={{color:"#C4B5FD"}}>{info.name}</strong>님의 진로 검사가<br/>
-            성공적으로 제출되었습니다.<br/><br/>
-            결과는 담당 선생님이 먼저 검토한 후<br/>
-            상담 시 함께 안내해 드립니다 🙏
-          </p>
-          <div style={{padding:"14px 18px",borderRadius:12,background:"rgba(109,33,176,.1)",border:"1px solid rgba(167,139,250,.18)",fontSize:13,color:"rgba(195,185,255,.7)",lineHeight:1.8,marginBottom:22}}>
-            📞 문의·상담 예약은 담당 선생님께 연락해 주세요
-          </div>
-        </div>
-      </div></div>
-    )}
+    {view==="quiz"&&<QuizView/>}
+
+    {view==="done"&&selSub&&<div className="root"><div className="card fu">
+      <LogoRow/>
+      <div style={{textAlign:"center",marginBottom:28}}>
+        <div style={{fontSize:56,marginBottom:14}}>🎉</div>
+        <h2>검사 완료!</h2>
+        <p className="muted">{selSub.info?.name}님의 진로 분석이 완성되었습니다.</p>
+      </div>
+      <button className="btn" onClick={()=>{setView("result_pub");window.location.hash=`r/${encodeURIComponent(selSub.token)}`;}}>📊 결과 보기</button>
+    </div></div>}
 
     {view==="result_pub"&&selSub&&(
       <ResultView sub={selSub} logo={logo} isPublic
@@ -1009,162 +919,90 @@ function App() {
         onPrint={()=>window.print()}/>
     )}
 
-    {view==="admin"&&!adminAuth&&(
-      <div className="root"><div className="card fu" style={{maxWidth:400}}>
+    {view==="admin"&&!adminAuth&&<div className="root"><div className="card fu" style={{maxWidth:400}}>
+      <LogoRow/>
+      <h2>관리자 로그인</h2>
+      <div className="inp-g" style={{marginTop:16}}><div className="inp-l">비밀번호</div>
+        <input className="inp" type="password" placeholder="••••••••" value={adminPw}
+          onChange={e=>{setAdminPw(e.target.value);setAdminErr(false);}}
+          onKeyDown={e=>e.key==="Enter"&&adminLogin()}/>
+        {adminErr&&<div style={{color:"#EF4444",fontSize:12,marginTop:6}}>비밀번호가 올바르지 않습니다.</div>}
+      </div>
+      <div className="btn-row" style={{marginTop:8}}>
+        <button className="btn btn-g" onClick={()=>{setView("home");window.location.hash="";}}>← 이전</button>
+        <button className="btn" onClick={adminLogin}>로그인</button>
+      </div>
+    </div></div>}
+
+    {view==="admin"&&adminAuth&&!selSub&&<div className="root top"><div className="card wide">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}} className="no-print">
         <LogoRow/>
-        <h2>관리자 로그인</h2>
-        {!sbReady&&<div style={{padding:"10px 14px",borderRadius:10,background:"rgba(245,158,11,.08)",border:"1px solid rgba(245,158,11,.2)",fontSize:12,color:"rgba(253,211,77,.7)",marginBottom:16,lineHeight:1.7}}>
-          ⚠️ Supabase 미연결 상태입니다.<br/>데이터가 이 기기에만 저장됩니다.
-        </div>}
-        <div className="inp-g" style={{marginTop:16}}>
-          <div className="inp-l">비밀번호</div>
-          <input className="inp" type="password" placeholder="••••••••" value={adminPw}
-            onChange={e=>{setAdminPw(e.target.value);setAdminErr(false);}}
-            onKeyDown={e=>e.key==="Enter"&&adminLogin()}/>
-          {adminErr&&<div style={{color:"#EF4444",fontSize:12,marginTop:6}}>비밀번호가 올바르지 않습니다.</div>}
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {sbReady&&<span style={{fontSize:11,color:"#34D399",display:"flex",alignItems:"center",gap:4}}>🟢 Supabase 연결됨</span>}
+          <button className="btn btn-g btn-sm" onClick={loadAdmin}>🔄</button>
+          <button className="btn btn-g btn-sm" onClick={()=>{setAdminAuth(false);setAdminPw("");window.location.hash="";}}>로그아웃</button>
         </div>
-        <div className="btn-row" style={{marginTop:8}}>
-          <button className="btn btn-g" onClick={()=>{setView("home");window.location.hash="";}}>← 이전</button>
-          <button className="btn" onClick={adminLogin}>로그인</button>
+      </div>
+      <div className="tabs no-print">
+        {[{k:"subs",l:"📋 제출 결과"},{k:"links",l:"🔗 링크 관리"},{k:"settings",l:"⚙️ 설정"}].map(({k,l})=>(
+          <button key={k} className={`tab${adminTab===k?" on":""}`} onClick={()=>setAdminTab(k)}>{l}</button>
+        ))}
+      </div>
+      {loadingAdmin&&<p className="muted">불러오는 중...</p>}
+      {adminTab==="subs"&&!loadingAdmin&&(<>
+        {subs.length===0&&<p className="muted" style={{textAlign:"center",padding:"32px 0"}}>아직 제출된 검사가 없습니다.</p>}
+        {subs.map(d=>(
+          <div key={d.token} className="srow-in" style={{cursor:"pointer",borderRadius:10,marginBottom:2}} onClick={()=>setSelSub(d.submission)}>
+            <div className={`status-dot status-done`}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:600,color:"#E2D9FE",fontSize:14}}>{d.label}</div>
+              <div style={{fontSize:11,color:"rgba(167,139,250,.45)",marginTop:2}}>{d.submission?.submittedAt} · {d.submission?.info?.grade}</div>
+            </div>
+            <span style={{fontSize:11,color:"rgba(167,139,250,.5)"}}>→ 보기</span>
+          </div>
+        ))}
+      </>)}
+      {adminTab==="links"&&!loadingAdmin&&(<>
+        <div style={{display:"flex",gap:8,marginBottom:20}}>
+          <input className="inp" placeholder="학생 이름 입력" value={newLabel} onChange={e=>setNewLabel(e.target.value)} onKeyDown={e=>e.key==="Enter"&&createToken()} style={{flex:1}}/>
+          <button className="btn btn-sm" style={{width:"auto"}} onClick={createToken}>+ 생성</button>
         </div>
-      </div></div>
-    )}
-
-    {view==="admin"&&adminAuth&&!selSub&&(
-      <div className="root top"><div className="card wide">
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}} className="no-print">
-          <LogoRow/>
-          <div style={{display:"flex",gap:8}}>
-            {sbReady&&<span style={{fontSize:11,color:"#34D399",display:"flex",alignItems:"center",gap:4}}>🟢 Supabase 연결됨</span>}
-            <button className="btn btn-g btn-sm" onClick={loadAdmin}>🔄</button>
-            <button className="btn btn-g btn-sm" onClick={()=>{setAdminAuth(false);setAdminPw("");window.location.hash="";}}>로그아웃</button>
+        {tokens.length===0&&<p className="muted" style={{textAlign:"center"}}>생성된 링크가 없습니다.</p>}
+        {tokens.map(d=>(
+          <div key={d.token} className="srow-in">
+            <div className={`status-dot status-wait`}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:600,color:"#E2D9FE",fontSize:14}}>{d.label}</div>
+              <div style={{fontSize:10,color:"rgba(167,139,250,.4)",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{resultUrl(d.token).replace("#r/","#")}</div>
+            </div>
+            <button className="btn btn-g btn-sm" style={{flexShrink:0,marginRight:4}} onClick={()=>copyLink(`${window.location.origin}${window.location.pathname}#${encodeURIComponent(d.token)}`)}>복사</button>
+            <button className="btn btn-sm" style={{flexShrink:0,background:"rgba(239,68,68,.2)",boxShadow:"none",border:"1px solid rgba(239,68,68,.3)",color:"#FCA5A5"}} onClick={()=>deleteToken(d.token)}>삭제</button>
+          </div>
+        ))}
+      </>)}
+      {adminTab==="settings"&&(<>
+        <div style={{padding:"14px 18px",borderRadius:12,background:sbReady?"rgba(52,211,153,.07)":"rgba(245,158,11,.07)",border:`1px solid ${sbReady?"rgba(52,211,153,.2)":"rgba(245,158,11,.2)"}`,fontSize:13,color:sbReady?"rgba(110,231,183,.85)":"rgba(253,211,77,.7)",marginBottom:24,lineHeight:1.8}}>
+          {sbReady?"🟢 Supabase 연결됨 — 모든 기기에서 데이터 공유 가능":"⚠️ Supabase 미연결 — 로컬 저장 모드"}
+        </div>
+        <h2>학원 로고</h2>
+        <div style={{display:"flex",alignItems:"center",gap:20,marginBottom:28}}>
+          <div style={{width:80,height:80,borderRadius:16,overflow:"hidden",background:logo?"transparent":"linear-gradient(140deg,#5B21B6,#7C3AED)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,flexShrink:0}}>
+            {logo?<img src={logo} style={{width:"100%",height:"100%",objectFit:"contain"}}/>:"✦"}
+          </div>
+          <div>
+            <button className="btn btn-sm" style={{width:"auto"}} onClick={()=>logoRef.current?.click()}>📁 로고 업로드</button>
+            {logo&&<button className="btn btn-g btn-sm" style={{marginLeft:8}} onClick={async()=>{setLogo(null);const cfg=await S.get(K.cfg())||{};delete cfg.logo;await S.set(K.cfg(),cfg);showToast("로고 삭제됨");}}>🗑 제거</button>}
+            <p style={{fontSize:11,color:"rgba(160,140,220,.45)",marginTop:8}}>PNG · JPG · SVG 권장</p>
+            <input ref={logoRef} type="file" accept="image/*" style={{display:"none"}} onChange={uploadLogo}/>
           </div>
         </div>
-
-        <div className="tabs no-print">
-          {[{k:"subs",l:"📋 제출 결과"},{k:"links",l:"🔗 링크 관리"},{k:"settings",l:"⚙️ 설정"}].map(({k,l})=>(
-            <button key={k} className={`tab ${adminTab===k?"on":""}`} onClick={()=>setAdminTab(k)}>{l}</button>
-          ))}
+        <div className="div"/>
+        <div style={{padding:"14px 18px",borderRadius:12,background:"rgba(255,255,255,.04)",border:"1px solid rgba(167,139,250,.1)",fontSize:13,color:"rgba(196,185,255,.7)",lineHeight:2.2}}>
+          학원 브랜드: <strong style={{color:"#A78BFA"}}>{BRAND}</strong><br/>
+          코드 형식: <strong style={{color:"#A78BFA",fontFamily:"'Gmarket Sans',sans-serif"}}>{BRAND}-XXXXXXXX</strong>
         </div>
-
-        {adminTab==="subs"&&(
-          <>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:22}}>
-            {[["총 제출",subs.length],["고등학생",subs.filter(s=>s.info?.grade?.startsWith("고")).length],["중학생",subs.filter(s=>s.info?.grade?.startsWith("중")).length]].map(([l,n])=>(
-              <div key={l} style={{textAlign:"center",padding:"16px",background:"rgba(109,33,176,.08)",border:"1px solid rgba(167,139,250,.1)",borderRadius:12}}>
-                <div style={{fontFamily:"'Gmarket Sans',sans-serif",fontSize:30,fontWeight:700,color:"#C4B5FD"}}>{n}</div>
-                <div style={{fontSize:9.5,color:"rgba(155,140,210,.5)",letterSpacing:1,marginTop:3}}>{l}</div>
-              </div>
-            ))}
-          </div>
-          {subs.length===0?(
-            <div style={{textAlign:"center",padding:"40px 0",color:"rgba(160,140,220,.3)",fontSize:14}}>아직 제출된 검사가 없습니다.</div>
-          ):(
-            <div>
-              {subs.map(s=>(
-                <DelRow key={s.id} onDelete={()=>deleteRecord(s.token||s.id)}>
-                  <div className="srow-in" style={{cursor:"pointer"}} onClick={()=>setSelSub(s)}>
-                    <div style={{width:36,height:36,borderRadius:10,background:"rgba(109,33,176,.18)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>👤</div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
-                        <span style={{fontFamily:"'Gmarket Sans',sans-serif",fontWeight:700,color:"#C4B5FD",fontSize:15}}>{s.info?.name}</span>
-                        <span style={{fontSize:11,color:"rgba(170,150,220,.5)"}}>{s.info?.grade}</span>
-                        <span style={{fontFamily:"'Gmarket Sans',sans-serif",fontSize:12,color:"#A78BFA",fontWeight:700}}>{s.r1}{s.r2}형</span>
-                        {s.mbtiType&&<span style={{fontSize:11,color:"rgba(167,139,250,.6)"}}>{s.mbtiType}</span>}
-                      </div>
-                      <div style={{fontSize:11,color:"rgba(150,130,190,.45)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                        {s.info?.school||""} · {s.submittedAt}
-                      </div>
-                    </div>
-                    <div style={{fontSize:11,color:"rgba(167,139,250,.4)"}}>›</div>
-                  </div>
-                </DelRow>
-              ))}
-            </div>
-          )}
-          </>
-        )}
-
-        {adminTab==="links"&&(
-          <>
-          <h2 style={{marginBottom:8}}>링크 생성</h2>
-          <p className="muted" style={{fontSize:13}}>학생 이름을 입력하고 링크를 생성하세요. 1인 전용, 한 번 제출되면 자동으로 잠깁니다.</p>
-          <div style={{display:"flex",gap:8,marginBottom:8}}>
-            <input className="inp" placeholder="학생 이름" value={newLabel}
-              onChange={e=>setNewLabel(e.target.value)}
-              onKeyDown={e=>e.key==="Enter"&&createLink()} style={{flex:1}}/>
-            <button className="btn btn-sm" style={{flex:"none"}} onClick={createLink}>+ 생성</button>
-          </div>
-          <p className="hint" style={{marginBottom:20,textAlign:"left"}}>링크 복사 후 카카오톡·문자로 학생에게 전송하세요.</p>
-          {links.length===0?(
-            <div style={{textAlign:"center",padding:"30px 0",color:"rgba(160,140,220,.3)",fontSize:14}}>생성된 링크가 없습니다.</div>
-          ):(
-            <div>
-              {links.map(d=>(
-                <DelRow key={d.token} onDelete={()=>deleteRecord(d.token)}>
-                  <div className="srow-in">
-                    <div className={`status-dot ${d.status==="used"?"status-done":"status-wait"}`}/>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
-                        <span style={{fontWeight:700,color:"#DDD6FE",fontSize:14}}>{d.label}</span>
-                        <span className="code-badge">{d.token}</span>
-                      </div>
-                      <div style={{fontSize:11,color:"rgba(150,130,190,.45)"}}>{d.createdAt}</div>
-                    </div>
-                    <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
-                      <button className="btn btn-sm" style={{padding:"6px 12px",fontSize:11}} onClick={()=>copyLink(testUrl(d.token))}>🔗 링크 복사</button>
-                      {d.status==="used"&&<button className="btn btn-g btn-sm" style={{padding:"6px 12px",fontSize:11}} onClick={()=>copyLink(resultUrl(d.token))}>📊 결과링크</button>}
-                    </div>
-                  </div>
-                </DelRow>
-              ))}
-            </div>
-          )}
-          </>
-        )}
-
-        {adminTab==="settings"&&(
-          <>
-          <h2 style={{marginBottom:8}}>Supabase 연결 상태</h2>
-          <div style={{padding:"14px 18px",borderRadius:12,marginBottom:20,
-            background:sbReady?"rgba(52,211,153,.08)":"rgba(245,158,11,.08)",
-            border:`1px solid ${sbReady?"rgba(52,211,153,.2)":"rgba(245,158,11,.2)"}`,
-            fontSize:13,lineHeight:2,color:sbReady?"rgba(110,231,183,.8)":"rgba(253,211,77,.7)"}}>
-            {sbReady?<>🟢 Supabase 연결됨 — 모든 기기에서 데이터 공유 가능</>:<>
-              ⚠️ Supabase 미연결 상태<br/>
-              <strong style={{color:"rgba(253,211,77,.9)"}}>연결 방법:</strong><br/>
-              1. supabase.com → 새 프로젝트 생성<br/>
-              2. SQL Editor에서 아래 쿼리 실행:<br/>
-              <code style={{background:"rgba(0,0,0,.2)",padding:"4px 8px",borderRadius:6,fontSize:11,display:"block",marginTop:6}}>
-                create table piltop_data (key text primary key, value jsonb, updated_at timestamptz);
-                alter table piltop_data enable row level security;
-                create policy "allow all" on piltop_data for all using (true) with check (true);
-              </code><br/>
-              3. Project Settings → API에서 URL과 anon key 복사<br/>
-              4. index.html 상단 SUPABASE_URL, SUPABASE_KEY에 붙여넣기 → GitHub 업로드
-            </>}
-          </div>
-
-          <h2 style={{marginBottom:8}}>학원 로고</h2>
-          <div style={{display:"flex",alignItems:"center",gap:20,marginBottom:28}}>
-            <div style={{width:80,height:80,borderRadius:16,overflow:"hidden",background:"linear-gradient(140deg,#6B21A8,#9333EA)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,flexShrink:0}}>
-              {logo?<img src={logo} style={{width:"100%",height:"100%",objectFit:"contain"}}/>:"✦"}
-            </div>
-            <div>
-              <button className="btn btn-sm" style={{width:"auto"}} onClick={()=>logoRef.current?.click()}>📁 로고 업로드</button>
-              <p style={{fontSize:11,color:"rgba(160,140,220,.45)",marginTop:8}}>PNG · JPG · SVG 권장</p>
-              <input ref={logoRef} type="file" accept="image/*" style={{display:"none"}} onChange={uploadLogo}/>
-            </div>
-          </div>
-          <div className="div"/>
-          <div style={{padding:"14px 18px",borderRadius:12,background:"rgba(255,255,255,.04)",border:"1px solid rgba(167,139,250,.1)",fontSize:13,color:"rgba(195,185,255,.7)",lineHeight:2.2}}>
-            학원 브랜드: <strong style={{color:"#A78BFA"}}>{BRAND}</strong><br/>
-            코드 형식: <strong style={{color:"#A78BFA",fontFamily:"'Gmarket Sans',sans-serif"}}>{BRAND}-XXXXXXXX</strong>
-          </div>
-          </>
-        )}
-      </div></div>
-    )}
+      </>)}
+    </div></div>}
 
     {view==="admin"&&adminAuth&&selSub&&(
       <ResultView sub={selSub} logo={logo}
@@ -1177,73 +1015,90 @@ function App() {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  RESULT VIEW (풍성한 결과)
-// ═══════════════════════════════════════════════════════════════
-function ResultView({sub, logo, onBack, onPrint, isPublic, resultLink, copyLink}) {
-  const s = sub;
-  const r1i=RM[s.r1], r2i=RM[s.r2], mi1i=MM[s.mi1], mi2i=MM[s.mi2], t1i=TM[s.tend1];
-  const radarR = s.riasec?.map(({key,score})=>({emoji:RM[key]?.emoji||"",label:RM[key]?.name||"",score}));
-  const radarMI = s.mi?.map(({key,score})=>({emoji:MM[key]?.emoji||"",label:(MM[key]?.name||"").replace("지능","").slice(0,4),score}));
+// ═══════════════════════════════
+//  RESULT VIEW
+// ═══════════════════════════════
+function ResultView({sub,logo,onBack,onPrint,isPublic,resultLink,copyLink}){
+  const s=sub;
+  const r1i=RM[s.r1],r2i=RM[s.r2],mi1i=MM[s.mi1],mi2i=MM[s.mi2],t1i=TM[s.tend1];
+  const radarR=s.riasec?.map(({key,score})=>({emoji:RM[key]?.emoji||"",label:RM[key]?.name||"",score}));
+  const radarMI=s.mi?.map(({key,score})=>({emoji:MM[key]?.emoji||"",label:(MM[key]?.name||"").replace("지능","").slice(0,4),score}));
+  const mbtiStudy=s.mbtiType?[s.mbtiType[0],s.mbtiType[1],s.mbtiType[2],s.mbtiType[3]].map(c=>MBTI_STUDY[c]).filter(Boolean):[];
 
-  // MBTI 학습 스타일
-  const mbtiStudy = s.mbtiType ? [
-    s.mbtiType[0], s.mbtiType[1], s.mbtiType[2], s.mbtiType[3]
-  ].map(c => MBTI_STUDY[c]).filter(Boolean) : [];
+  const [aiComment,setAiComment]=useState(null);
+  const [aiLoading,setAiLoading]=useState(false);
+
+  useEffect(()=>{
+    if(CLAUDE_API_KEY==="YOUR_CLAUDE_API_KEY")return;
+    setAiLoading(true);
+    generateAIComment(s).then(txt=>{setAiComment(txt);setAiLoading(false);});
+  },[]);
 
   const LogoBox=()=>(
     <div className="logo-row" style={{marginBottom:0}}>
-      <div className="logo-box">{logo?<img src={logo} alt="logo"/>:"✦"}</div>
-      <div>
+      <div className="logo-box" style={{background:logo?"transparent":"",boxShadow:logo?"none":""}}>
+        {logo?<img src={logo} alt="logo" style={{width:"100%",height:"100%",objectFit:"contain"}}/>:"✦"}
+      </div>
+      {!logo&&<div>
         <div className="logo-name"><span className="p">PIL</span><span className="t">TOP</span></div>
         <div className="logo-tag">Career Compass</div>
-      </div>
+      </div>}
     </div>
   );
 
-  return (
-    <div className="root top"><div className="card wide">
+  return(
+    <div className={`root top${isPublic?" pub":""}`}><div className={`card wide${isPublic?" pub-card":""}`}>
 
-      {/* 화면 버튼 (인쇄 시 숨김) */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}} className="no-print">
-        <LogoBox/>
-        <div style={{display:"flex",gap:8}}>
-          {!isPublic&&resultLink&&copyLink&&<button className="btn btn-g btn-sm" onClick={()=>copyLink(resultLink)}>🔗 결과공유</button>}
-          <button className="btn btn-sm" onClick={onPrint}>🖨 PDF</button>
-          {onBack&&<button className="btn btn-g btn-sm" onClick={onBack}>← 목록</button>}
+      {/* 헤더 */}
+      {isPublic?(
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}} className="no-print">
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:42,height:42,borderRadius:10,overflow:"hidden",flexShrink:0,background:logo?"transparent":"linear-gradient(140deg,#0F766E,#14B8A6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,boxShadow:logo?"none":"0 4px 14px rgba(20,184,166,.2)"}}>
+              {logo?<img src={logo} alt="logo" style={{width:"100%",height:"100%",objectFit:"contain"}}/>:"✦"}
+            </div>
+            {!logo&&<div>
+              <div style={{fontFamily:"'Gmarket Sans',sans-serif",fontSize:15,fontWeight:700,color:"#5EEAD4"}}>진로 검사 결과</div>
+              <div style={{fontSize:9,color:"rgba(94,234,212,.4)",letterSpacing:2}}>CAREER COMPASS</div>
+            </div>}
+          </div>
+          <button className="btn btn-sm" style={{background:"linear-gradient(135deg,#0F766E,#14B8A6)",boxShadow:"0 4px 18px rgba(20,184,166,.2)"}} onClick={onPrint}>🖨 PDF 저장</button>
         </div>
-      </div>
+      ):(
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}} className="no-print">
+          <LogoBox/>
+          <div style={{display:"flex",gap:8}}>
+            {resultLink&&copyLink&&<button className="btn btn-g btn-sm" onClick={()=>copyLink(resultLink)}>🔗 결과공유</button>}
+            <button className="btn btn-sm" onClick={onPrint}>🖨 PDF</button>
+            {onBack&&<button className="btn btn-g btn-sm" onClick={onBack}>← 목록</button>}
+          </div>
+        </div>
+      )}
 
       {/* 인쇄용 헤더 */}
       <div className="print-header" style={{display:"none"}}>
-        <div className="print-header-logo">PIL<span style={{color:"#64748B"}}>TOP</span> Career Compass</div>
-        <div className="print-header-info">
-          진로적성 종합분석 보고서<br/>
-          검사일: {s.submittedAt}<br/>
-          {s.info?.school}
+        <div>
+          <div className="print-header-logo">{logo?<img src={logo} alt="logo" style={{height:32,objectFit:"contain",filter:"brightness(0) invert(1)"}}/>:"PILTOP Career Compass"}</div>
+          <div className="print-header-sub">진로적성 종합분석 보고서</div>
         </div>
+        <div className="print-header-info">검사일: {s.submittedAt}<br/>{s.info?.school&&<>{s.info.school}<br/></>}{s.info?.grade}</div>
       </div>
 
       {/* 학생 카드 */}
-      <div className="student-card" style={{display:"flex",gap:16,alignItems:"center",padding:"16px 20px",
-        background:"rgba(109,33,176,.08)",border:"1px solid rgba(167,139,250,.13)",borderRadius:16,marginBottom:24}}>
-        <div style={{fontSize:44}}>👤</div>
+      <div className="student-card print-section" style={{display:"flex",gap:16,alignItems:"center",padding:"16px 20px",background:"rgba(91,33,182,.08)",border:"1px solid rgba(139,92,246,.2)",borderRadius:16,marginBottom:24}}>
+        <div style={{fontSize:40}}>👤</div>
         <div style={{flex:1}}>
-          <div className="student-name" style={{fontFamily:"'Gmarket Sans',sans-serif",fontSize:22,fontWeight:700,color:"#DDD6FE"}}>{s.info?.name}</div>
-          <div className="student-meta" style={{fontSize:13,color:"rgba(170,150,220,.6)",marginTop:3,lineHeight:1.8}}>
+          <div style={{fontFamily:"'Gmarket Sans',sans-serif",fontSize:22,fontWeight:700,color:"#EDE9FF"}}>{s.info?.name}</div>
+          <div style={{fontSize:13,color:"rgba(196,181,253,.8)",marginTop:3,lineHeight:1.8}}>
             {s.info?.grade}{s.info?.school?` · ${s.info.school}`:""}
-            {s.info?.studentPhone?<><br/>📱 학생 {s.info.studentPhone}</>:""}
-            {s.info?.parentPhone?<span style={{marginLeft:12}}>학부모 {s.info.parentPhone}</span>:""}
+            {s.info?.studentPhone&&<><br/>📱 {s.info.studentPhone}</>}
+            {s.info?.parentPhone&&<span style={{marginLeft:12}}>학부모 {s.info.parentPhone}</span>}
           </div>
-          <div style={{fontSize:11,color:"rgba(140,120,180,.45)",marginTop:3}}>제출 {s.submittedAt}</div>
+          <div style={{fontSize:11,color:"rgba(167,139,250,.5)",marginTop:3}}>제출 {s.submittedAt}</div>
         </div>
-        {s.mbtiType&&(
-          <div className="mbti-box" style={{textAlign:"center",padding:"10px 16px",background:"rgba(109,33,176,.15)",
-            border:"1px solid rgba(167,139,250,.2)",borderRadius:12,flexShrink:0}}>
-            <div className="mbti-type" style={{fontFamily:"'Gmarket Sans',sans-serif",fontSize:26,fontWeight:700,color:"#A78BFA"}}>{s.mbtiType}</div>
-            <div style={{fontSize:9.5,color:"rgba(160,140,220,.55)",marginTop:3,maxWidth:100}}>{MBTI_DESC[s.mbtiType]?.split("·")[0]||""}</div>
-          </div>
-        )}
+        {s.mbtiType&&<div className="mbti-box" style={{textAlign:"center",padding:"10px 16px",background:"rgba(91,33,182,.2)",border:"1px solid rgba(139,92,246,.35)",borderRadius:12,flexShrink:0}}>
+          <div className="mbti-type" style={{fontFamily:"'Gmarket Sans',sans-serif",fontSize:26,fontWeight:700,color:"#C4B5FD"}}>{s.mbtiType}</div>
+          <div style={{fontSize:9.5,color:"rgba(196,181,253,.6)",marginTop:3}}>{MBTI_DESC[s.mbtiType]||""}</div>
+        </div>}
       </div>
 
       {/* Hero */}
@@ -1255,28 +1110,28 @@ function ResultView({sub, logo, onBack, onPrint, isPublic, resultLink, copyLink}
           {t1i&&<span className="pill">{t1i.emoji} {t1i.name}</span>}
           {s.mbtiType&&<span className="pill">{s.mbtiType}</span>}
         </div>
-        <div style={{marginTop:12,fontSize:13,color:"rgba(175,162,255,.65)",lineHeight:1.75}}>{r1i?.desc}</div>
+        <div style={{marginTop:12,fontSize:13.5,color:"rgba(220,210,255,.8)",lineHeight:1.75}}>{r1i?.desc}</div>
       </div>
 
       {/* 종합 분석 요약 */}
       <div className="print-section" style={{marginBottom:20}}>
         <div className="sec-t">📋 종합 분석 요약</div>
-        <div className="type-desc-box" style={{background:"rgba(109,33,176,.06)",borderLeft:"3px solid #7C3AED",borderRadius:"0 12px 12px 0",padding:"14px 18px"}}>
-          <p className="type-desc-text" style={{fontSize:13.5,lineHeight:1.95,color:"rgba(220,210,255,.85)"}}>
-            <strong style={{color:"#C4B5FD"}}>{s.info?.name}</strong>님은 <strong style={{color:"#C4B5FD"}}>{r1i?.name}({s.r1})</strong>과 <strong style={{color:"#C4B5FD"}}>{r2i?.name}({s.r2})</strong>의 복합 흥미 성향을 보입니다.
+        <div className="type-desc-box" style={{background:"rgba(91,33,182,.07)",borderLeft:"3px solid #7C3AED",borderRadius:"0 12px 12px 0",padding:"14px 18px"}}>
+          <p className="type-desc-text" style={{fontSize:13.5,lineHeight:2,color:"rgba(230,220,255,.9)"}}>
+            <strong style={{color:"#DDD6FE"}}>{s.info?.name}</strong>님은 <strong style={{color:"#DDD6FE"}}>{r1i?.name}({s.r1})</strong>과 <strong style={{color:"#DDD6FE"}}>{r2i?.name}({s.r2})</strong>의 복합 흥미 성향을 보입니다.
             {" "}{r1i?.fullDesc}
-            {mi1i&&<>{" "}다중지능 중 <strong style={{color:"#C4B5FD"}}>{mi1i?.name}</strong>이 가장 두드러지며, {mi1i?.desc}에서 강점을 발휘합니다.</>}
-            {t1i&&<>{" "}계열 성향으로는 <strong style={{color:"#C4B5FD"}}>{t1i?.name}</strong>에 가장 강한 흥미를 보이고 있어 이 방향을 중심으로 진로를 탐색하는 것을 권장합니다.</>}
+            {mi1i&&<>{" "}다중지능 중 <strong style={{color:"#DDD6FE"}}>{mi1i?.name}</strong>이 가장 두드러지며, {mi1i?.desc}에서 강점을 발휘합니다.</>}
+            {t1i&&<>{" "}<strong style={{color:"#DDD6FE"}}>{t1i?.name}</strong> 계열 적성이 높아 이 방향을 중심으로 탐색하는 것을 권장합니다.</>}
           </p>
         </div>
       </div>
 
       {/* 레이더 차트 */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:20}} className="print-section">
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:20}} className="print-section radar-grid">
         {[{title:"RIASEC 흥미 유형",items:radarR},{title:"다중지능 프로파일",items:radarMI}].map(({title,items})=>(
-          <div key={title} style={{background:"rgba(255,255,255,.025)",border:"1px solid rgba(167,139,250,.08)",borderRadius:14,padding:16,textAlign:"center"}}>
+          <div key={title} style={{background:"rgba(255,255,255,.025)",border:"1px solid rgba(139,92,246,.1)",borderRadius:14,padding:16,textAlign:"center",overflow:"hidden"}}>
             <div className="sec-t" style={{marginBottom:10}}>{title}</div>
-            {items&&<Radar items={items} size={185}/>}
+            <div className="radar-wrap">{items&&<Radar items={items} size={185}/>}</div>
           </div>
         ))}
       </div>
@@ -1284,30 +1139,26 @@ function ResultView({sub, logo, onBack, onPrint, isPublic, resultLink, copyLink}
       {/* 흥미 유형 상세 */}
       <div className="print-section">
         <div className="sec-t">흥미 유형 (RIASEC)</div>
-        {s.riasec?.map(({key,score},i) => (
-          <Bar key={key} label={`${RM[key]?.emoji} ${RM[key]?.name}`} score={score} rank={i} color={RM[key]?.color||"#7C3AED"}/>
-        ))}
+        {s.riasec?.map(({key,score},i)=><Bar key={key} label={`${RM[key]?.emoji} ${RM[key]?.name}`} score={score} rank={i} color={RM[key]?.color||"#7C3AED"}/>)}
       </div>
 
-      {/* 주요 유형 상세 설명 */}
+      {/* 주요 유형 카드 — 패턴 해석 포함 */}
       <div className="print-section" style={{marginBottom:20}}>
         {[{key:s.r1,rank:1},{key:s.r2,rank:2}].map(({key,rank})=>{
-          const info=RM[key];if(!info)return null;
+          const inf=RM[key];if(!inf)return null;
           return(
-            <div key={key} style={{marginBottom:12,padding:"14px 16px",background:"rgba(255,255,255,.025)",border:"1px solid rgba(167,139,250,.08)",borderRadius:12}}>
+            <div key={key} style={{marginBottom:12,padding:"16px 18px",background:"rgba(255,255,255,.03)",border:"1px solid rgba(139,92,246,.12)",borderRadius:14}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                <span style={{fontSize:20}}>{info.emoji}</span>
-                <span style={{fontFamily:"'Gmarket Sans',sans-serif",fontWeight:700,color:info.color,fontSize:14}}>{rank}순위 · {info.name}</span>
-                <span style={{fontSize:11,color:"rgba(160,140,220,.5)",padding:"2px 8px",borderRadius:6,background:"rgba(255,255,255,.05)"}}>{info.stream}</span>
+                <span style={{fontSize:22}}>{inf.emoji}</span>
+                <span style={{fontFamily:"'Gmarket Sans',sans-serif",fontWeight:700,color:inf.color,fontSize:15}}>{rank}순위 · {inf.name}</span>
+                <span style={{fontSize:11,color:"rgba(196,181,253,.55)",padding:"2px 8px",borderRadius:6,background:"rgba(255,255,255,.05)"}}>{inf.stream}</span>
               </div>
-              <div style={{fontSize:12.5,color:"rgba(200,188,255,.7)",lineHeight:1.8,marginBottom:10}}>{info.fullDesc}</div>
-              <div>
-                <span style={{fontSize:10,color:"rgba(155,140,210,.5)",letterSpacing:2,marginRight:8}}>핵심강점</span>
-                {info.strength?.map(s=><span key={s} className="strength-tag">✓ {s}</span>)}
+              <p style={{fontSize:13,color:"rgba(220,210,255,.85)",lineHeight:1.85,marginBottom:10}}>{inf.fullDesc}</p>
+              <div style={{marginBottom:8}}>
+                <span style={{fontSize:10,color:"rgba(196,181,253,.55)",letterSpacing:2,marginRight:8}}>핵심강점</span>
+                {inf.strength?.map(st=><span key={st} className="strength-tag">✓ {st}</span>)}
               </div>
-              <div style={{marginTop:8,fontSize:11,color:"rgba(160,140,210,.5)"}}>
-                📚 학습 스타일: {info.study}
-              </div>
+              <div style={{fontSize:12,color:"rgba(196,181,253,.6)"}}>📚 학습 스타일: {inf.study}</div>
             </div>
           );
         })}
@@ -1317,12 +1168,10 @@ function ResultView({sub, logo, onBack, onPrint, isPublic, resultLink, copyLink}
       {/* 다중지능 */}
       <div className="print-section">
         <div className="sec-t">다중지능 (Gardner MI)</div>
-        {s.mi?.map(({key,score},i) => (
-          <Bar key={key} label={`${MM[key]?.emoji} ${MM[key]?.name}`} score={score} rank={i} color={MM[key]?.color||"#7C3AED"}/>
-        ))}
-        {mi1i&&<div style={{marginTop:10,padding:"10px 14px",background:"rgba(255,255,255,.025)",borderRadius:10,fontSize:12.5,color:"rgba(200,188,255,.7)",lineHeight:1.8}}>
-          💡 <strong style={{color:"#C4B5FD"}}>{mi1i.name}</strong>: {mi1i.desc}
-          {mi2i&&<><br/>🔹 <strong style={{color:"rgba(196,181,253,.7)"}}>{mi2i.name}</strong>: {mi2i.desc}</>}
+        {s.mi?.map(({key,score},i)=><Bar key={key} label={`${MM[key]?.emoji} ${MM[key]?.name}`} score={score} rank={i} color={MM[key]?.color||"#7C3AED"}/>)}
+        {mi1i&&<div style={{marginTop:10,padding:"12px 14px",background:"rgba(255,255,255,.03)",borderRadius:10,border:"1px solid rgba(139,92,246,.1)",fontSize:13,color:"rgba(220,210,255,.85)",lineHeight:1.85}}>
+          💡 <strong style={{color:"#DDD6FE"}}>{mi1i.name}</strong>: {mi1i.desc}
+          {mi2i&&<><br/>🔹 <strong style={{color:"rgba(221,214,254,.75)"}}>{mi2i.name}</strong>: {mi2i.desc}</>}
         </div>}
       </div>
       <div className="div"/>
@@ -1330,46 +1179,36 @@ function ResultView({sub, logo, onBack, onPrint, isPublic, resultLink, copyLink}
       {/* 계열 성향 */}
       <div className="print-section">
         <div className="sec-t">계열 성향</div>
-        {s.tend?.map(({key,score},i) => (
-          <Bar key={key} label={`${TM[key]?.emoji} ${TM[key]?.name}`} score={score} rank={i} color={TM[key]?.color||"#7C3AED"}/>
-        ))}
+        {s.tend?.map(({key,score},i)=><Bar key={key} label={`${TM[key]?.emoji} ${TM[key]?.name}`} score={score} rank={i} color={TM[key]?.color||"#7C3AED"}/>)}
       </div>
       <div className="div"/>
 
-      {/* MBTI 학습 스타일 */}
-      {s.mbtiType&&mbtiStudy.length>0&&(
-        <>
+      {/* MBTI */}
+      {s.mbtiType&&mbtiStudy.length>0&&<>
         <div className="print-section" style={{marginBottom:20}}>
           <div className="sec-t">🧠 MBTI 기반 학습 스타일 ({s.mbtiType})</div>
-          <div style={{background:"rgba(99,102,241,.06)",border:"1px solid rgba(99,102,241,.15)",borderRadius:12,padding:"14px 16px"}}>
-            <div style={{fontFamily:"'Gmarket Sans',sans-serif",fontWeight:700,color:"#A5B4FC",fontSize:15,marginBottom:10}}>
-              {s.mbtiType} — {MBTI_DESC[s.mbtiType]}
-            </div>
-            {mbtiStudy.map((txt,i)=>(
-              <div key={i} style={{fontSize:12.5,color:"rgba(200,188,255,.75)",lineHeight:1.85,marginBottom:6,paddingLeft:14,borderLeft:"2px solid rgba(99,102,241,.3)"}}>
-                {txt}
-              </div>
-            ))}
+          <div style={{background:"rgba(99,102,241,.07)",border:"1px solid rgba(99,102,241,.2)",borderRadius:12,padding:"14px 16px"}}>
+            <div style={{fontFamily:"'Gmarket Sans',sans-serif",fontWeight:700,color:"#C7D2FE",fontSize:15,marginBottom:10}}>{s.mbtiType} — {MBTI_DESC[s.mbtiType]}</div>
+            {mbtiStudy.map((txt,i)=><div key={i} style={{fontSize:13,color:"rgba(221,214,254,.85)",lineHeight:1.9,marginBottom:6,paddingLeft:14,borderLeft:"2px solid rgba(99,102,241,.35)"}}>{txt}</div>)}
           </div>
         </div>
         <div className="div"/>
-        </>
-      )}
+      </>}
 
-      {/* 직업 가치관 */}
+      {/* 직업가치관 */}
       <div className="print-section sec-b">
         <div className="sec-t">직업 가치관 Top 3</div>
         <div className="tags">
-          {s.valueTop?.map((v,i)=><span key={v} className={`tag ${i===0?"hi":""}`}>{["🥇","🥈","🥉"][i]} {v}</span>)}
+          {s.valueTop?.map((v,i)=><span key={v} className={`tag${i===0?" hi":""}`}>{["🥇","🥈","🥉"][i]} {v}</span>)}
         </div>
       </div>
       <div className="div"/>
 
-      {/* 추천 학과·직업 */}
+      {/* 추천 전공/직업 */}
       <div className="print-section sec-b">
         <div className="sec-t">🎯 추천 학과·전공</div>
         <div className="tags" style={{marginBottom:16}}>
-          {s.cross?.majors?.map((m,i)=><span key={m} className={`tag ${i<3?"hi":""}`}>{i<3?"⭐ ":""}{m}</span>)}
+          {s.cross?.majors?.map((m,i)=><span key={m} className={`tag${i<3?" hi":""}`}>{i<3?"⭐ ":""}{m}</span>)}
         </div>
         <div className="sec-t">💼 추천 직업군</div>
         <div className="tags">
@@ -1379,26 +1218,67 @@ function ResultView({sub, logo, onBack, onPrint, isPublic, resultLink, copyLink}
       <div className="div"/>
 
       {/* 상담 포인트 (관리자 전용) */}
-      {!isPublic&&(
-        <>
+      {!isPublic&&<>
         <div className="print-section sec-b">
-          <div className="sec-t">💬 상담 포인트 (선생님 전용)</div>
+          <div className="sec-t">💬 패턴 분석 · 상담 포인트 (선생님 전용)</div>
           <div className="adv">
             <strong>핵심 프로파일: RIASEC {s.r1}{s.r2} · 주력지능 {mi1i?.name} · 계열 {t1i?.name||"—"} · MBTI {s.mbtiType||"—"}</strong>
             <br/><br/>
-            {s.cross?.pts?.map((p,i)=><div key={i} style={{marginBottom:6,paddingLeft:8,borderLeft:"2px solid rgba(99,102,241,.4)"}}>📌 {p}</div>)}
+            {s.cross?.pts?.map((p,i)=><div key={i} style={{marginBottom:8,paddingLeft:10,borderLeft:"2px solid rgba(99,102,241,.4)"}}>📌 {p}</div>)}
             <br/>
-            <strong>✦ 추천 교내활동:</strong><br/>
-            <div style={{marginTop:6,display:"flex",flexWrap:"wrap",gap:6}}>
-              {s.cross?.acts?.map(a=><span key={a} style={{padding:"3px 10px",borderRadius:6,background:"rgba(99,102,241,.12)",border:"1px solid rgba(99,102,241,.2)",fontSize:12,color:"#A5B4FC"}}>{a}</span>)}
+            <strong>✦ 추천 교내활동 (생기부 연계):</strong>
+            <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:6}}>
+              {s.cross?.acts?.map(a=><span key={a} style={{padding:"4px 12px",borderRadius:6,background:"rgba(99,102,241,.15)",border:"1px solid rgba(99,102,241,.25)",fontSize:12.5,color:"#C7D2FE"}}>{a}</span>)}
             </div>
           </div>
         </div>
         <div className="div"/>
-        </>
-      )}
+      </>}
 
-      <div style={{fontSize:11,color:"rgba(140,120,180,.4)",lineHeight:1.9,textAlign:"center",marginBottom:16}}>
+      {/* AI 맞춤 코멘트 */}
+      <div className="print-section sec-b">
+        <div className="sec-t">✨ AI 맞춤 진로 코멘트</div>
+        <div className="ai-box">
+          {aiLoading&&<div className="ai-loading"><div className="ai-dot"/><span>AI가 맞춤 진로 코멘트를 작성 중입니다...</span></div>}
+          {!aiLoading&&aiComment&&<p style={{fontSize:13.5,lineHeight:2,color:"rgba(220,252,231,.88)",whiteSpace:"pre-wrap"}}>{aiComment}</p>}
+          {!aiLoading&&!aiComment&&CLAUDE_API_KEY==="YOUR_CLAUDE_API_KEY"&&<p style={{fontSize:12.5,color:"rgba(110,231,183,.5)",lineHeight:1.8}}>AI 코멘트 기능을 사용하려면 CLAUDE_API_KEY를 설정해주세요.</p>}
+          {!aiLoading&&!aiComment&&CLAUDE_API_KEY!=="YOUR_CLAUDE_API_KEY"&&<p style={{fontSize:12.5,color:"rgba(110,231,183,.5)"}}>코멘트 생성에 실패했습니다.</p>}
+        </div>
+      </div>
+      <div className="div"/>
+
+      {/* 총평 */}
+      <div className="print-section sec-b summary-box">
+        <div className="sec-t" style={{color:"rgba(110,231,183,.75)"}}>✦ 진로 종합 총평</div>
+        <p style={{fontSize:13.5,color:"rgba(220,252,231,.85)",lineHeight:2,marginBottom:16}}>
+          <strong style={{color:"#6EE7B7"}}>{s.info?.name}</strong>님의 검사를 종합하면,
+          <strong style={{color:"#6EE7B7"}}> {r1i?.name}({s.r1}) + {r2i?.name}({s.r2})</strong> 흥미에
+          <strong style={{color:"#6EE7B7"}}> {mi1i?.name}</strong>이 결합된 강점 프로파일입니다.
+          {t1i&&<> <strong style={{color:"#6EE7B7"}}>{t1i.name}</strong> 계열 진출 적합도가 높으며,</>}
+          {s.mbtiType&&<> <strong style={{color:"#6EE7B7"}}>{s.mbtiType}</strong> 성격 특성이 진로 선택에 중요한 방향성을 제시합니다.</>}
+          {" "}가치관으로는 <strong style={{color:"#6EE7B7"}}>{s.valueTop?.[0]}</strong>을 가장 중요하게 여기므로 이를 충족하는 진로 설계가 필요합니다.
+        </p>
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:10,color:"rgba(110,231,183,.65)",letterSpacing:2,marginBottom:8,fontFamily:"'Gmarket Sans',sans-serif"}}>⭐ 최우선 추천 전공</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+            {s.cross?.majors?.slice(0,5).map((m,i)=>(
+              <span key={m} style={{padding:"6px 14px",borderRadius:99,fontSize:12.5,fontWeight:600,background:"rgba(52,211,153,.15)",border:"1px solid rgba(52,211,153,.35)",color:"#6EE7B7"}}>
+                {i===0?"🥇 ":i===1?"🥈 ":i===2?"🥉 ":""}{m}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div style={{fontSize:10,color:"rgba(110,231,183,.65)",letterSpacing:2,marginBottom:8,fontFamily:"'Gmarket Sans',sans-serif"}}>💼 최우선 추천 직업</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+            {s.cross?.jobs?.slice(0,4).map(j=>(
+              <span key={j} style={{padding:"6px 14px",borderRadius:99,fontSize:12.5,background:"rgba(52,211,153,.08)",border:"1px solid rgba(52,211,153,.18)",color:"rgba(167,243,208,.9)"}}>✦ {j}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{fontSize:11,color:"rgba(139,92,246,.4)",lineHeight:1.9,textAlign:"center",marginBottom:16,marginTop:20}}>
         ※ Holland RIASEC · Gardner MI 이론 기반 전문 참고용 검사입니다.<br/>심층 상담을 통해 정확한 진로 설계를 진행해 주세요.
       </div>
       <div className="btn-row no-print">
@@ -1409,9 +1289,9 @@ function ResultView({sub, logo, onBack, onPrint, isPublic, resultLink, copyLink}
   );
 }
 
-const container = document.getElementById("root");
-const root = ReactDOM.createRoot(container);
+const container=document.getElementById("root");
+const root=ReactDOM.createRoot(container);
 root.render(React.createElement(App));
-  </script>
+</script>
 </body>
 </html>
