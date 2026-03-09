@@ -593,7 +593,7 @@ function App(){
           setInfo(prog.info||{name:"",grade:"",school:"",studentPhone:"",parentPhone:""});
           setMbtiMode(prog.mbtiMode||"none");
           setMbtiKnown(prog.mbtiKnown||"");
-          setView("resume"); // 이어하기 확인 화면
+          setView("quiz"); // 바로 이어하기
         } else {
           setView("start");
         }
@@ -879,29 +879,54 @@ function App(){
         </div>}
       <button className="btn"
         disabled={!info.name||!info.grade||(!!tokenData?.label&&info.name.trim()!==tokenData.label.trim())}
-        onClick={()=>{setView("mbti_select");}}>다음 →</button>
+        onClick={()=>{setView("mbti_choice");}}>다음 →</button>
     </div></div>}
 
 
 
-    {view==="mbti_select"&&<div className="root"><div className="card fu">
+    {/* MBTI CHOICE — 3분류 선택 */}
+    {view==="mbti_choice"&&<div className="root"><div className="card fu">
       <LogoRow/>
-      <h2>MBTI 입력 방식 선택</h2>
-      <p className="muted">MBTI를 알고 있으면 입력하고, 모르면 검사하거나 건너뛸 수 있어요.</p>
-      <p className="muted" style={{fontSize:12,marginBottom:14}}>나의 MBTI 유형을 선택하세요. 모르면 하단에서 건너뛸 수 있어요.</p>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:16}}>
-        {["ISTJ","ISFJ","INFJ","INTJ","ISTP","ISFP","INFP","INTP","ESTP","ESFP","ENFP","ENTP","ESTJ","ESFJ","ENFJ","ENTJ"].map(t=>(
-          <button key={t} onClick={()=>{setMbtiKnown(t);setMbtiMode("input");}}
-            style={{padding:"10px 4px",borderRadius:10,border:`1px solid ${mbtiKnown===t?"#A78BFA":"rgba(139,92,246,.2)"}`,background:mbtiKnown===t?"rgba(139,92,246,.25)":"rgba(255,255,255,.03)",color:mbtiKnown===t?"#E2D9FE":"rgba(196,181,253,.6)",fontSize:13,fontWeight:mbtiKnown===t?700:400,cursor:"pointer",transition:"all .15s"}}>
-            {t}
+      <h2>MBTI 성격 유형</h2>
+      <p className="muted">MBTI를 알고 계신가요?</p>
+      <div className="ab-opts" style={{marginBottom:20}}>
+        {[
+          {mode:"input", l:"이미 알고 있어요", t:"✅  직접 선택할게요"},
+          {mode:"test",  l:"잘 모르겠어요",    t:"🧪  16문항 검사로 확인할게요"},
+          {mode:"none",  l:"건너뛰기",         t:"⏭  MBTI 없이 진행할게요"},
+        ].map(({mode,l,t})=>(
+          <button key={mode} className="ab-opt" onClick={()=>{
+            setMbtiMode(mode);
+            if(mode==="input"){setView("mbti_input");}
+            else{setSecIdx(0);setQIdx(0);autoSave({},0,0,info,mode,"");setView("quiz");}
+          }}>
+            <div className="ab-label">{l}</div>
+            <div className="ab-text">{t}</div>
           </button>
         ))}
       </div>
-      {mbtiKnown&&mbtiMode==="input"&&<div style={{textAlign:"center",marginBottom:12,fontSize:13,color:"#A78BFA"}}>✓ {mbtiKnown} 선택됨 — {MBTI_DESC[mbtiKnown]||""}</div>}
+      <button className="btn btn-g" onClick={()=>setView("info")}>← 이전</button>
+    </div></div>}
+
+    {/* MBTI INPUT — 16종 그리드 */}
+    {view==="mbti_input"&&<div className="root"><div className="card fu">
+      <LogoRow/>
+      <h2>MBTI 유형 선택</h2>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:16}}>
+        {["INTJ","INTP","ENTJ","ENTP","INFJ","INFP","ENFJ","ENFP","ISTJ","ISFJ","ESTJ","ESFJ","ISTP","ISFP","ESTP","ESFP"].map(t=>(
+          <button key={t}
+            className={`g-btn${mbtiKnown===t?" sel":""}`}
+            style={{padding:"12px 4px",fontSize:12}}
+            onClick={()=>setMbtiKnown(t)}>{t}</button>
+        ))}
+      </div>
+      {mbtiKnown&&<div style={{marginBottom:16,padding:"10px 16px",borderRadius:10,
+        background:"rgba(109,33,176,.12)",border:"1px solid rgba(167,139,250,.2)",fontSize:13,color:"#C4B5FD"}}>
+        {mbtiKnown} — {MBTI_DESC[mbtiKnown]||""}
+      </div>}
       <div className="btn-row">
-        <button className="btn btn-g" onClick={()=>setView("info")}>← 이전</button>
-        <button className="btn btn-g" onClick={()=>{setMbtiMode("none");setMbtiKnown("");setView("quiz");autoSave({},0,0,info,"none","");}}>건너뛰기</button>
-        <button className="btn" disabled={!mbtiKnown||mbtiMode!=="input"} onClick={()=>{setView("quiz");autoSave({},0,0,info,mbtiMode,mbtiKnown);}}>검사 시작 →</button>
+        <button className="btn btn-g" onClick={()=>setView("mbti_choice")}>← 이전</button>
+        <button className="btn" disabled={!mbtiKnown} onClick={()=>{setSecIdx(0);setQIdx(0);autoSave({},0,0,info,"input",mbtiKnown);setView("quiz");}}>시작 →</button>
       </div>
     </div></div>}
 
