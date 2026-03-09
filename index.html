@@ -520,10 +520,9 @@ function App(){
   const [loadingAdmin,setLoadingAdmin]=useState(false);
   const [tokens,setTokens]=useState([]);
   const [newLabel,setNewLabel]=useState("");
-  const [settingsData,setSettingsData]=useState(null);
   const logoRef=useRef();
   const toastRef=useRef();
-  const activeSecs=mbtiMode==="test"?SECS:SECS.filter(s=>s.key!=="mbti_test");
+  const activeSecs=mbtiMode==="test"?SECS:SECS.filter(s=>s.key!=="mbti");
 
   const showToast=msg=>{setToast(msg);clearTimeout(toastRef.current);toastRef.current=setTimeout(()=>setToast(""),2600);};
   const resultUrl=t=>`${window.location.origin}${window.location.pathname}#r/${encodeURIComponent(t)}`;
@@ -837,7 +836,14 @@ function App(){
           <input className="inp" placeholder="010-0000-0000" value={info.parentPhone} onChange={e=>setInfo({...info,parentPhone:e.target.value})}/>
         </div>
       </div>
-      <button className="btn" disabled={!info.name||!info.grade} onClick={()=>{setView("mbti_select");autoSave({},0,0,info,"none","");}}>다음 →</button>
+      {tokenData?.label&&info.name&&info.name.trim()!==tokenData.label.trim()&&
+        <div style={{marginBottom:12,padding:"10px 14px",borderRadius:10,background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.3)",fontSize:13,color:"#FCA5A5"}}>
+          ⚠️ 선생님께 등록된 이름과 다릅니다. 정확히 입력해 주세요.<br/>
+          <span style={{fontSize:11,opacity:.7}}>힌트: {tokenData.label[0]+"*".repeat(tokenData.label.length-1)}</span>
+        </div>}
+      <button className="btn"
+        disabled={!info.name||!info.grade||(!!tokenData?.label&&info.name.trim()!==tokenData.label.trim())}
+        onClick={()=>{setView("mbti_select");autoSave({},0,0,info,"none","");}}>다음 →</button>
     </div></div>}
 
     {view==="mbti_select"&&<div className="root"><div className="card fu">
