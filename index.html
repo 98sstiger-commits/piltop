@@ -3,7 +3,19 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>PILTOP 진로검사</title>
+  <title>PILTOP 진로검사 | 나의 진로를 발견하는 여정</title>
+  <!-- OG 미리보기 태그 -->
+  <meta property="og:title" content="나의 진로를 발견하는 여정 · PILTOP"/>
+  <meta property="og:description" content="Holland RIASEC · 다중지능 · MBTI · 직업가치관 종합 진로적성 검사 | 60문항 · 약 10분"/>
+  <meta property="og:image" content="https://piltop.vercel.app/og-image.svg"/>
+  <meta property="og:image:width" content="1200"/>
+  <meta property="og:image:height" content="630"/>
+  <meta property="og:type" content="website"/>
+  <meta property="og:url" content="https://piltop.vercel.app"/>
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="나의 진로를 발견하는 여정 · PILTOP"/>
+  <meta name="twitter:description" content="Holland RIASEC · 다중지능 · MBTI · 직업가치관 종합 진로적성 검사"/>
+  <meta name="twitter:image" content="https://piltop.vercel.app/og-image.svg"/>
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7.23.3/babel.min.js"></script>
@@ -20,8 +32,8 @@ const {useState,useEffect,useRef,useCallback}=React;
 const AID   = "PILTOP";
 const APW   = "piltop";
 const BRAND = "PILTOP";
-const SUPABASE_URL = "YOUR_SUPABASE_URL";
-const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY";
+const SUPABASE_URL = "https://zmtldohklivkzpfdyflc.supabase.co"
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptdGxkb2hrbGl2a3pwZmR5ZmxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5NjgxMDQsImV4cCI6MjA4ODU0NDEwNH0.cv1WrvDzNedVZABWyRCS9ARRxf4Si9qgeUqEvhpHWlo"
 
 // ═══════════════════════════════
 //  STORAGE
@@ -551,7 +563,7 @@ function App(){
       }
       const t=decodeURIComponent(hash);
       const d=await S.get(K.link(t));
-      if(!d){setView("home");return;}
+      if(!d){setView("link_invalid");return;}
       setToken(t);setTokenData(d);
       if(d.status==="used"){setSelSub(d.submission);setView("already");}
       else {
@@ -762,7 +774,7 @@ function App(){
       <h1>나의 진로를<br/>발견하는 여정</h1>
       <p className="muted">선생님께 받은 링크를 클릭하면<br/>바로 검사가 시작됩니다.</p>
       <div style={{marginTop:20,textAlign:"center"}}>
-        <button className="btn-g btn btn-sm" style={{margin:"0 auto"}} onClick={()=>{window.location.hash="admin";setView("admin");}}>🔐 관리자</button>
+        <span style={{fontSize:11,color:"rgba(139,92,246,.2)",cursor:"pointer",letterSpacing:1}} onClick={()=>{window.location.hash="admin";setView("admin");}}>관리자</span>
       </div>
     </div></div>}
 
@@ -805,6 +817,13 @@ function App(){
       </div>
     </div></div>}
 
+    {view==="link_invalid"&&<div className="root"><div className="card fu" style={{textAlign:"center"}}>
+      <LogoRow/>
+      <div style={{fontSize:52,marginBottom:16}}>🔗</div>
+      <h2>링크를 확인해 주세요</h2>
+      <p className="muted">선생님께 받은 링크를 정확히 눌러주세요.<br/>직접 주소를 입력하면 검사를 시작할 수 없습니다.</p>
+    </div></div>}
+
     {view==="result_notfound"&&<div className="root"><div className="card fu" style={{textAlign:"center"}}>
       <LogoRow/>
       <div style={{fontSize:52,marginBottom:16}}>🔍</div>
@@ -843,27 +862,10 @@ function App(){
         </div>}
       <button className="btn"
         disabled={!info.name||!info.grade||(!!tokenData?.label&&info.name.trim()!==tokenData.label.trim())}
-        onClick={()=>{setView("mbti_select");autoSave({},0,0,info,"none","");}}>다음 →</button>
+        onClick={()=>{setMbtiMode("test");setView("quiz");autoSave({},0,0,info,"test","");}}>다음 →</button>
     </div></div>}
 
-    {view==="mbti_select"&&<div className="root"><div className="card fu">
-      <LogoRow/>
-      <h2>MBTI 입력 방식 선택</h2>
-      <p className="muted">MBTI를 알고 있으면 입력하고, 모르면 검사하거나 건너뛸 수 있어요.</p>
-      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
-        {[{v:"input",icon:"✏️",t:"MBTI 직접 입력",sub:"이미 알고 있어요"},{v:"test",icon:"🧩",t:"MBTI 검사하기 (12문항)",sub:"모르거나 확인하고 싶어요"},{v:"none",icon:"⏭",t:"건너뛰기",sub:"지금은 패스할게요"}].map(o=>(
-          <button key={o.v} className={`ab-opt${mbtiMode===o.v?" a":""}`} onClick={()=>setMbtiMode(o.v)}>
-            <div className="ab-label">{o.icon}</div>
-            <div className="ab-text">{o.t}</div>
-            <div style={{fontSize:11.5,color:"rgba(167,139,250,.5)",marginTop:3}}>{o.sub}</div>
-          </button>
-        ))}
-      </div>
-      {mbtiMode==="input"&&<div className="inp-g"><div className="inp-l">MBTI 유형</div>
-        <input className="inp" placeholder="ENFP" maxLength={4} value={mbtiKnown} onChange={e=>setMbtiKnown(e.target.value.toUpperCase())}/>
-      </div>}
-      <button className="btn" disabled={mbtiMode==="input"&&mbtiKnown.length!==4} onClick={()=>{setView("quiz");}}>검사 시작 →</button>
-    </div></div>}
+
 
     {view==="quiz"&&<QuizView/>}
 
@@ -875,12 +877,15 @@ function App(){
         <p className="muted">{selSub.info?.name}님의 진로 분석이 완성되었습니다.</p>
       </div>
       <button className="btn" onClick={()=>{setView("result_pub");window.location.hash=`r/${encodeURIComponent(selSub.token)}`;}}>📊 결과 보기</button>
+      <button className="btn btn-g" style={{marginTop:10}} onClick={()=>copyLink(`${window.location.origin}${window.location.pathname}#r/${encodeURIComponent(selSub.token)}`)}>🔗 결과 링크 복사</button>
     </div></div>}
 
     {view==="result_pub"&&selSub&&(
       <ResultView sub={selSub} logo={logo} isPublic
         onBack={()=>{setSelSub(null);setView("home");window.location.hash="";}}
-        onPrint={()=>window.print()}/>
+        onPrint={()=>window.print()}
+        resultLink={`${window.location.origin}${window.location.pathname}#r/${encodeURIComponent(selSub.token)}`}
+        copyLink={copyLink}/>
     )}
 
     {view==="admin"&&!adminAuth&&<div className="root"><div className="card fu" style={{maxWidth:400}}>
