@@ -984,7 +984,7 @@ function App(){
                   setDeletingToken(d.token);clearTimeout(deleteTimerRef.current);
                   deleteTimerRef.current=setTimeout(()=>setDeletingToken(null),1500);
                 }
-              }}>{deletingToken===d.token?"확인?":"삭제"}</button>
+              }}>{deletingToken===d.token?"한번 더!":"삭제"}</button>
           </div>
         ))}
       </>)}
@@ -999,14 +999,14 @@ function App(){
             <div className={`status-dot status-wait`}/>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontWeight:600,color:"#E2D9FE",fontSize:14}}>{d.label}</div>
-              <div style={{fontSize:10,color:"rgba(167,139,250,.4)",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{resultUrl(d.token).replace("#r/","#")}</div>
+              <div style={{fontSize:10,color:"rgba(167,139,250,.4)",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{`${window.location.origin}${window.location.pathname}?t=${encodeURIComponent(d.token)}`}</div>
             </div>
             <button className="btn btn-g btn-sm" style={{flexShrink:0,marginRight:4}} onClick={()=>copyLink(`${window.location.origin}${window.location.pathname}?t=${encodeURIComponent(d.token)}`)}>복사</button>
-            <button className="btn btn-sm" style={{flexShrink:0,background:deletingToken===d.token?"rgba(239,68,68,.5)":"rgba(239,68,68,.2)",boxShadow:"none",border:"1px solid rgba(239,68,68,.3)",color:"#FCA5A5",minWidth:52}}
-              onClick={()=>{
+            <button className="btn btn-sm" style={{flexShrink:0,background:deletingToken===d.token?"rgba(239,68,68,.6)":"rgba(239,68,68,.2)",boxShadow:"none",border:"1px solid rgba(239,68,68,.3)",color:"#FCA5A5",minWidth:52}}
+              onClick={(e)=>{e.stopPropagation();
                 if(deletingToken===d.token){clearTimeout(deleteTimerRef.current);setDeletingToken(null);deleteToken(d.token);}
-                else{setDeletingToken(d.token);clearTimeout(deleteTimerRef.current);deleteTimerRef.current=setTimeout(()=>setDeletingToken(null),1500);}
-              }}>{deletingToken===d.token?"확인?":"삭제"}</button>
+                else{clearTimeout(deleteTimerRef.current);setDeletingToken(d.token);deleteTimerRef.current=setTimeout(()=>setDeletingToken(null),2000);}
+              }}>{deletingToken===d.token?"한번 더!":"삭제"}</button>
           </div>
         ))}
       </>)}
