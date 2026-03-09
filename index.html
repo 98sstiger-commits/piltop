@@ -796,9 +796,6 @@ function App(){
       <LogoRow/>
       <h1>나의 진로를<br/>발견하는 여정</h1>
       <p className="muted">선생님께 받은 링크를 클릭하면<br/>바로 검사가 시작됩니다.</p>
-      <div style={{marginTop:20,textAlign:"center"}}>
-        <span style={{fontSize:11,color:"rgba(139,92,246,.2)",cursor:"pointer",letterSpacing:1}} onClick={()=>{window.location.hash="admin";setView("admin");}}>관리자</span>
-      </div>
     </div></div>}
 
     {view==="resume"&&<div className="root"><div className="card fu">
@@ -836,7 +833,6 @@ function App(){
         <div style={{fontSize:52,marginBottom:14}}>🔒</div>
         <h2>이미 제출된 검사입니다</h2>
         <p className="muted">이 코드로 이미 검사가 완료되었습니다.<br/>선생님께 문의해 주세요.</p>
-        <button className="btn btn-g btn-sm" style={{margin:"0 auto"}} onClick={()=>{setView("home");window.history.replaceState(null,"",window.location.pathname);}}>← 처음으로</button>
       </div>
     </div></div>}
 
