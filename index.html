@@ -984,7 +984,16 @@ function App(){
       <ResultView sub={selSub} logo={logo} isPublic
         onBack={()=>{setSelSub(null);setView("finished");window.history.replaceState(null,'',window.location.pathname);}}
         onPrint={()=>{
-          window.print();
+          const isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+          if(isMobile){
+            alert('PDF 저장 방법
+
+[iPhone] 하단 공유버튼 탭 후 프린트 선택
+[Android] 브라우저 메뉴에서 인쇄 선택');
+          } else {
+            window.print();
+          }
+        }
         }}
         resultLink={`${window.location.origin}${window.location.pathname}?r=${encodeURIComponent(selSub.token)}`}
         copyLink={copyLink}/>
@@ -1100,7 +1109,16 @@ function App(){
       <ResultView sub={selSub} logo={logo}
         onBack={()=>setSelSub(null)}
         onPrint={()=>{
-          window.print();
+          const isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+          if(isMobile){
+            alert('PDF 저장 방법
+
+[iPhone] 하단 공유버튼 탭 후 프린트 선택
+[Android] 브라우저 메뉴에서 인쇄 선택');
+          } else {
+            window.print();
+          }
+        }
         }}
         resultLink={resultUrl(selSub.token||selSub.id)}
         copyLink={copyLink}/>
