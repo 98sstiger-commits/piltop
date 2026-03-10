@@ -342,10 +342,10 @@ const CSS=`
 html,body{min-height:100vh;background:#060C18;}
 ::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-thumb{background:rgba(29,111,216,.3);border-radius:99px;}
 .root{min-height:100vh;padding:28px 16px;
-  background:radial-gradient(ellipse 60% 40% at 50% 0%,rgba(88,28,220,.18) 0%,transparent 60%),
-  radial-gradient(ellipse 40% 30% at 90% 90%,rgba(30,27,100,.15) 0%,transparent 50%),
+  background:radial-gradient(ellipse 60% 40% at 50% 0%,rgba(29,111,216,.18) 0%,transparent 60%),
+  radial-gradient(ellipse 40% 30% at 90% 90%,rgba(15,74,153,.15) 0%,transparent 50%),
   linear-gradient(170deg,#060C18 0%,#0A1628 60%,#090718 100%);
-  font-family:'Noto Sans KR',sans-serif;color:#EDE9FF;
+  font-family:'Noto Sans KR',sans-serif;color:#E8F0FF;
   display:flex;align-items:center;justify-content:center;}
 .root.top{align-items:flex-start;padding-top:36px;}
 .root.pub{background:radial-gradient(ellipse 60% 40% at 50% 0%,rgba(29,111,216,.12) 0%,transparent 55%),linear-gradient(170deg,#06111A 0%,#07131E 60%,#060F18 100%);}
@@ -389,7 +389,7 @@ h2{font-family:'Gmarket Sans',sans-serif;font-size:20px;font-weight:700;color:#E
 .inp-g{margin-bottom:16px;}
 .inp-l{font-size:10.5px;color:rgba(160,140,210,.55);margin-bottom:7px;letter-spacing:2.5px;text-transform:uppercase;}
 .inp{width:100%;padding:13px 16px;background:rgba(255,255,255,.045);border:1px solid rgba(43,126,232,.15);
-  border-radius:12px;color:#EDE9FF;font-size:15px;font-family:'Noto Sans KR',sans-serif;outline:none;transition:all .2s;}
+  border-radius:12px;color:#E8F0FF;font-size:15px;font-family:'Noto Sans KR',sans-serif;outline:none;transition:all .2s;}
 .inp:focus{border-color:rgba(43,126,232,.5);background:rgba(255,255,255,.07);}
 .inp::placeholder{color:rgba(160,140,220,.22);}
 .g-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
@@ -404,7 +404,7 @@ h2{font-family:'Gmarket Sans',sans-serif;font-size:20px;font-weight:700;color:#E
 .sec-tag{display:inline-flex;align-items:center;gap:7px;padding:5px 13px;border-radius:99px;
   font-size:10.5px;font-weight:600;letter-spacing:1.5px;background:rgba(91,33,182,.14);border:1px solid rgba(43,126,232,.2);color:#60A5FA;
   margin-bottom:18px;font-family:'Gmarket Sans',sans-serif;}
-.q-text{font-size:18px;font-weight:500;line-height:1.7;color:#EDE9FF;margin-bottom:28px;min-height:54px;}
+.q-text{font-size:18px;font-weight:500;line-height:1.7;color:#E8F0FF;margin-bottom:28px;min-height:54px;}
 .scale{display:flex;gap:6px;}
 .sc-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;}
 .sc-btn{width:100%;padding:10px 4px;border-radius:13px;border:1px solid rgba(255,255,255,.09);
@@ -986,13 +986,10 @@ function App(){
         onPrint={()=>{
           const isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
           if(isMobile){
-            alert('📱 PDF 저장 방법
+            alert('PDF 저장 방법
 
-[iPhone/iPad]
-화면 하단 공유버튼(□↑) → 프린트
-
-[Android]
-브라우저 메뉴(⋮) → 인쇄 또는 PDF로 저장');
+[iPhone] 하단 공유버튼 → 프린트
+[Android] 브라우저 메뉴 → 인쇄');
           } else {
             window.print();
           }
@@ -1113,13 +1110,10 @@ function App(){
         onPrint={()=>{
           const isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
           if(isMobile){
-            alert('📱 PDF 저장 방법
+            alert('PDF 저장 방법
 
-[iPhone/iPad]
-화면 하단 공유버튼(□↑) → 프린트
-
-[Android]
-브라우저 메뉴(⋮) → 인쇄 또는 PDF로 저장');
+[iPhone] 하단 공유버튼 → 프린트
+[Android] 브라우저 메뉴 → 인쇄');
           } else {
             window.print();
           }
