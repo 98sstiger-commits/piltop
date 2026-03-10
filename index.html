@@ -733,10 +733,10 @@ function App(){
         onTouchEnd={()=>clearTimeout(logoTapRef.current._long)}>
         {logo?<img src={logo} alt="logo"/>:"✦"}
       </div>
-      {!logo&&<div>
+      <div>
         <div className="logo-name"><span className="p">PIL</span><span className="t">TOP</span></div>
         <div className="logo-tag">Career Compass</div>
-      </div>}
+      </div>
     </div>
   );
 
@@ -984,12 +984,7 @@ function App(){
       <ResultView sub={selSub} logo={logo} isPublic
         onBack={()=>{setSelSub(null);setView("finished");window.history.replaceState(null,'',window.location.pathname);}}
         onPrint={()=>{
-          const isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-          if(isMobile){
-            alert('PDF 저장 방법\n[iPhone] 하단 공유버튼 -> 프린트\n[Android] 브라우저 메뉴 -> 인쇄');
-          } else {
-            window.print();
-          }
+          window.print();
         }}
         resultLink={`${window.location.origin}${window.location.pathname}?r=${encodeURIComponent(selSub.token)}`}
         copyLink={copyLink}/>
@@ -1105,12 +1100,7 @@ function App(){
       <ResultView sub={selSub} logo={logo}
         onBack={()=>setSelSub(null)}
         onPrint={()=>{
-          const isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-          if(isMobile){
-            alert('PDF 저장 방법\n[iPhone] 하단 공유버튼 -> 프린트\n[Android] 브라우저 메뉴 -> 인쇄');
-          } else {
-            window.print();
-          }
+          window.print();
         }}
         resultLink={resultUrl(selSub.token||selSub.id)}
         copyLink={copyLink}/>
@@ -1136,10 +1126,10 @@ function ResultView({sub,logo,onBack,onPrint,isPublic,resultLink,copyLink}){
       <div className="logo-box" style={{background:logo?"transparent":"",boxShadow:logo?"none":""}}>
         {logo?<img src={logo} alt="logo" style={{width:"100%",height:"100%",objectFit:"contain"}}/>:"✦"}
       </div>
-      {!logo&&<div>
+      <div>
         <div className="logo-name"><span className="p">PIL</span><span className="t">TOP</span></div>
         <div className="logo-tag">Career Compass</div>
-      </div>}
+      </div>
     </div>
   );
 
