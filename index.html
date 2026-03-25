@@ -537,6 +537,8 @@ function App(){
   const [tokens,setTokens]=useState([]);
   const [newLabel,setNewLabel]=useState("");
   const [deletingToken,setDeletingToken]=useState(null);
+  const [subsPage,setSubsPage]=useState(0);
+  const SUBS_PER_PAGE=10;
   const deleteTimerRef=useRef(null);
   const logoRef=useRef();
   const toastRef=useRef();
@@ -1048,7 +1050,7 @@ function App(){
       {loadingAdmin&&<p className="muted">불러오는 중...</p>}
       {adminTab==="subs"&&!loadingAdmin&&(<>
         {subs.length===0&&<p className="muted" style={{textAlign:"center",padding:"32px 0"}}>아직 제출된 검사가 없습니다.</p>}
-        {subs.map(d=>(
+        {subs.slice(subsPage*SUBS_PER_PAGE,(subsPage+1)*SUBS_PER_PAGE).map(d=>(
           <div key={d.token} className="srow-in" style={{borderRadius:10,marginBottom:2}}>
             <div className={`status-dot status-done`}/>
             <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={()=>setSelSub(d.submission)}>
@@ -1068,6 +1070,19 @@ function App(){
               }}>{deletingToken===d.token?"한번 더!":"삭제"}</button>
           </div>
         ))}
+        {subs.length>SUBS_PER_PAGE&&(
+          <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:16,flexWrap:"wrap"}}>
+            {Array.from({length:Math.ceil(subs.length/SUBS_PER_PAGE)},(_,i)=>(
+              <button key={i} onClick={()=>setSubsPage(i)}
+                style={{padding:"6px 13px",borderRadius:8,border:"1px solid",fontSize:13,fontWeight:600,cursor:"pointer",
+                  background:subsPage===i?"rgba(91,33,182,.45)":"rgba(255,255,255,.05)",
+                  borderColor:subsPage===i?"rgba(43,126,232,.6)":"rgba(255,255,255,.1)",
+                  color:subsPage===i?"#BFDBFE":"rgba(147,197,253,.5)"}}>
+                {i+1}
+              </button>
+            ))}
+          </div>
+        )}
       </>)}
       {adminTab==="links"&&!loadingAdmin&&(<>
         <div style={{display:"flex",gap:8,marginBottom:20}}>
