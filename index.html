@@ -610,7 +610,7 @@ function App(){
     const ll=await S.get(K.links())||[];
     const loaded=[];
     for(const t of ll){ const d=await S.get(K.link(t)); if(d)loaded.push(d); }
-    setSubs(loaded.filter(d=>d.status==="used"));
+    setSubs(loaded.filter(d=>d.status==="used").sort((a,b)=>new Date(b.submission?.submittedAt||0)-new Date(a.submission?.submittedAt||0)));
     setTokens(loaded.filter(d=>d.status!=="used"));
     setLoadingAdmin(false);
   }
