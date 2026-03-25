@@ -605,12 +605,24 @@ function App(){
     })();
   },[]);
 
-  async function loadAdmin(){
+  function parseKrDate(s){
+    if(!s)return 0;
+    try{
+      const m=s.match(/(\d+)\.\s*(\d+)\.\s*(\d+)\.\s*(오전|오후)\s*(\d+):(\d+):(\d+)/);
+      if(!m)return 0;
+      let[,y,mo,d,ap,h,mi,se]=m;
+      h=parseInt(h);
+      if(ap==='오후'&&h!==12)h+=12;
+      if(ap==='오전'&&h===12)h=0;
+      return new Date(y,mo-1,d,h,mi,se).getTime();
+    }catch(e){return 0;}
+  }
+    async function loadAdmin(){
     setLoadingAdmin(true);
     const ll=await S.get(K.links())||[];
     const loaded=[];
     for(const t of ll){ const d=await S.get(K.link(t)); if(d)loaded.push(d); }
-    setSubs(loaded.filter(d=>d.status==="used").sort((a,b)=>new Date(b.submission?.submittedAt||0)-new Date(a.submission?.submittedAt||0)));
+    setSubs(loaded.filter(d=>d.status==="used").sort((a,b)=>parseKrDate(b.submission?.submittedAt)-parseKrDate(a.submission?.submittedAt)));
     setTokens(loaded.filter(d=>d.status!=="used"));
     setLoadingAdmin(false);
   }
